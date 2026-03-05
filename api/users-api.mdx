@@ -1,0 +1,469 @@
+---
+title: "Users API"
+description: "Complete API reference for user management endpoints"
+---
+
+## Overview
+
+The Users API provides endpoints for user account management, including registration, profile updates, password changes, and account deletion.
+
+**Base URL**: `/api/usuarios`
+
+**Source**: `UsuarioController.java`
+
+## Authentication
+
+<Note>
+- **Public endpoints**: User registration (`POST /api/usuarios/register`)
+- **Authenticated endpoints**: View/update own profile, change password, delete account
+- **Admin endpoints**: List all users - requires `ROLE_ADMIN`
+</Note>
+
+---
+
+## Endpoints
+
+### Register User
+
+```http
+POST /api/usuarios/register
+```
+
+Register a new user account. The system automatically generates a verification token and sends an activation email.
+
+**Authentication**: None (public endpoint)
+
+**Request Body**:
+
+<ParamField body="nombre" type="string" required>
+  User's first name
+</ParamField>
+
+<ParamField body="apellido" type="string" required>
+  User's last name
+</ParamField>
+
+<ParamField body="email" type="string" required>
+  User's email address (must be unique)
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  User's password (will be encrypted with BCrypt)
+</ParamField>
+
+<ParamField body="telefono" type="string">
+  Phone number
+</ParamField>
+
+<ParamField body="direccion" type="string">
+  Default shipping address
+</ParamField>
+
+**Example Request**:
+
+```bash cURL
+curl -X POST http://localhost:8080/api/usuarios/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nombre": "Juan",
+    "apellido": "Pérez",
+    "email": "juan.perez@example.com",
+    "password": "SecurePass123",
+    "telefono": "+1234567890",
+    "direccion": "123 Main Street, City"
+  }'
+```
+
+**Response**: `201 Created`
+
+```json
+{
+  "message": "Usuario registrado con éxito. Por favor, revisa tu correo para activar tu cuenta.",
+  "usuario": {
+    "id": 10,
+    "nombre": "Juan",
+    "apellido": "Pérez",
+    "email": "juan.perez@example.com",
+    "enabled": false,
+    "tokenVerificacion": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+  }
+}
+```
+
+<Note>
+**Automatic Actions**:
+- Password is encrypted using **BCrypt**
+- Account is created with `enabled = false`
+- Unique verification token (UUID) is generated
+- Email with activation link is sent to the user
+</Note>
+
+<Warning>
+Users must verify their email before they can log in. The login endpoint will return `403 Forbidden` if the account is not enabled.
+</Warning>
+
+---
+
+### List All Users (Admin)
+
+```http
+GET /api/usuarios
+```
+
+Retrieve all registered users.
+
+**Authentication**: Required - `ROLE_ADMIN`
+
+**Response**: `200 OK` - Array of user objects
+
+**Example Request**:
+
+```bash cURL
+curl -X GET http://localhost:8080/api/usuarios \
+  -H "Authorization: Bearer ADMIN_JWT_TOKEN"
+```
+
+---
+
+### Get User by ID
+
+```http
+GET /api/usuarios/{id}
+```
+
+Retrieve a specific user's profile.
+
+**Authentication**: Required (user can access their own profile; admins can access any profile)
+
+<ParamField path="id" type="long" required>
+  User ID
+</ParamField>
+
+**Responses**:
+- `200 OK` - User object
+- `404 Not Found` - User does not exist
+
+**Response Body**:
+
+<ResponseField name="id" type="long">
+  User ID
+</ResponseField>
+
+<ResponseField name="nombre" type="string">
+  First name
+</ResponseField>
+
+<ResponseField name="apellido" type="string">
+  Last name
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  Email address
+</ResponseField>
+
+<ResponseField name="telefono" type="string">
+  Phone number
+</ResponseField>
+
+<ResponseField name="direccion" type="string">
+  Shipping address
+</ResponseField>
+
+<ResponseField name="enabled" type="boolean">
+  Account activation status
+</ResponseField>
+
+<ResponseField name="roles" type="array">
+  Array of role objects (ROLE_USER, ROLE_ADMIN)
+</ResponseField>
+
+**Example Request**:
+
+```bash cURL
+curl -X GET http://localhost:8080/api/usuarios/5 \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+---
+
+### Update User Profile
+
+```http
+PUT /api/usuarios/{id}
+```
+
+Update user profile information.
+
+**Authentication**: Required (user can update their own profile; admins can update any profile)
+
+<ParamField path="id" type="long" required>
+  User ID
+</ParamField>
+
+**Request Body**: User object with updated fields (nombre, apellido, telefono, direccion)
+
+**Responses**:
+- `200 OK` - Updated user object
+- `404 Not Found` - User does not exist
+
+**Example Request**:
+
+```bash cURL
+curl -X PUT http://localhost:8080/api/usuarios/5 \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nombre": "Juan",
+    "apellido": "Pérez",
+    "telefono": "+1234567890",
+    "direccion": "456 New Address, City"
+  }'
+```
+
+<Tip>
+Do not include `password` or `email` in the update request. Use dedicated endpoints for those operations.
+</Tip>
+
+---
+
+### Change Password
+
+```http
+PATCH /api/usuarios/{id}/password
+```
+
+Change user's password (requires current password for verification).
+
+**Authentication**: Required (user can change their own password)
+
+<ParamField path="id" type="long" required>
+  User ID
+</ParamField>
+
+**Request Body**:
+
+<ParamField body="actualPassword" type="string" required>
+  Current password
+</ParamField>
+
+<ParamField body="nuevaPassword" type="string" required>
+  New password
+</ParamField>
+
+**Example Request**:
+
+```bash cURL
+curl -X PATCH http://localhost:8080/api/usuarios/5/password \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "actualPassword": "OldPass123",
+    "nuevaPassword": "NewSecurePass456"
+  }'
+```
+
+**Responses**:
+
+- `200 OK`
+  ```json
+  {"message": "Contraseña actualizada"}
+  ```
+
+- `400 Bad Request`
+  ```json
+  {"message": "Error al cambiar contraseña"}
+  ```
+
+<Note>
+The service validates that `actualPassword` matches the user's current password before applying the change. The new password is encrypted with BCrypt.
+</Note>
+
+---
+
+### Delete User Account
+
+```http
+DELETE /api/usuarios/{id}
+```
+
+Delete a user account.
+
+**Authentication**: Required (user can delete their own account; admins can delete any account)
+
+<ParamField path="id" type="long" required>
+  User ID
+</ParamField>
+
+**Response**: `204 No Content`
+
+**Example Request**:
+
+```bash cURL
+curl -X DELETE http://localhost:8080/api/usuarios/5 \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+<Warning>
+Deleting a user account is **permanent**. All associated data (orders, cart) may be affected. Consider implementing a soft delete or account deactivation instead.
+</Warning>
+
+---
+
+## User Model
+
+The complete user object structure:
+
+```json
+{
+  "id": 5,
+  "nombre": "Juan",
+  "apellido": "Pérez",
+  "email": "juan.perez@example.com",
+  "telefono": "+1234567890",
+  "direccion": "123 Main Street, City",
+  "enabled": true,
+  "tokenVerificacion": null,
+  "roles": [
+    {
+      "id": 1,
+      "nombre": "ROLE_USER"
+    }
+  ],
+  "fechaRegistro": "2024-01-15T10:30:00"
+}
+```
+
+---
+
+## Integration Examples
+
+### Frontend: User Registration Flow
+
+```javascript JavaScript
+async function registerUser(userData) {
+  try {
+    const response = await fetch('http://localhost:8080/api/usuarios/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(userData)
+    });
+    
+    if (response.ok) {
+      const result = await response.json();
+      console.log('Registration successful:', result.message);
+      // Show message: "Check your email to activate your account"
+      return result;
+    } else {
+      console.error('Registration failed');
+    }
+  } catch (error) {
+    console.error('Error during registration:', error);
+  }
+}
+
+// Usage
+await registerUser({
+  nombre: 'Juan',
+  apellido: 'Pérez',
+  email: 'juan.perez@example.com',
+  password: 'SecurePass123',
+  telefono: '+1234567890',
+  direccion: '123 Main Street'
+});
+```
+
+### Frontend: Update User Profile
+
+```javascript JavaScript
+async function updateProfile(userId, updates, token) {
+  const response = await fetch(`http://localhost:8080/api/usuarios/${userId}`, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(updates)
+  });
+  
+  return response.json();
+}
+
+// Usage
+await updateProfile(5, {
+  telefono: '+9876543210',
+  direccion: '456 New Address'
+}, userToken);
+```
+
+### Frontend: Change Password
+
+```javascript JavaScript
+async function changePassword(userId, currentPassword, newPassword, token) {
+  const response = await fetch(`http://localhost:8080/api/usuarios/${userId}/password`, {
+    method: 'PATCH',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      actualPassword: currentPassword,
+      nuevaPassword: newPassword
+    })
+  });
+  
+  if (response.ok) {
+    const result = await response.json();
+    console.log('Password updated:', result.message);
+  } else {
+    console.error('Failed to change password');
+  }
+}
+```
+
+---
+
+## Security Considerations
+
+<CardGroup cols={2}>
+  <Card title="Password Encryption" icon="lock">
+    All passwords are encrypted using **BCrypt** with Spring Security's default strength (10 rounds).
+  </Card>
+  
+  <Card title="Email Verification" icon="envelope-circle-check">
+    Users must verify their email via a unique UUID token before accessing protected resources.
+  </Card>
+  
+  <Card title="Role-Based Access" icon="shield">
+    Endpoints enforce RBAC - users can only access their own data unless they have `ROLE_ADMIN`.
+  </Card>
+  
+  <Card title="JWT Authentication" icon="key">
+    All authenticated endpoints require a valid JWT token in the `Authorization` header.
+  </Card>
+</CardGroup>
+
+---
+
+## Error Responses
+
+| Status Code | Scenario | Common Cause |
+|-------------|----------|-------------|
+| `400 Bad Request` | Registration failed | Email already exists |
+| `401 Unauthorized` | Missing/invalid token | User not logged in |
+| `403 Forbidden` | Account not enabled | Email not verified |
+| `403 Forbidden` | Access denied | User accessing another user's data |
+| `404 Not Found` | User does not exist | Invalid user ID |
+| `500 Internal Server Error` | Email sending failed | SMTP configuration issue |
+
+---
+
+## Related Endpoints
+
+<CardGroup cols={2}>
+  <Card title="Authentication API" icon="key" href="/api/auth-endpoints">
+    Login, registration, and password recovery
+  </Card>
+  <Card title="Orders API" icon="receipt" href="/api/orders-api">
+    View user order history
+  </Card>
+</CardGroup>

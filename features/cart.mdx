@@ -1,0 +1,500 @@
+---
+title: "Shopping Cart"
+description: "Shopping cart management with add/remove items and checkout functionality"
+---
+
+## Overview
+
+TechStore's shopping cart system provides a persistent, user-specific cart that stores items before purchase. The cart seamlessly converts to orders during checkout, automatically managing stock validation and order creation.
+
+<Note>
+Carts are persistent and user-specific. Each user has one active cart that survives across sessions.
+</Note>
+
+## Cart Model
+
+The cart system uses two entities:
+
+```java
+@Entity
+public class Carrito {
+    private Long id;
+    
+    @OneToOne
+    private Usuario usuario;
+    
+    @OneToMany(mappedBy = "carrito", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<CarritoItem> items = new ArrayList<>();
+}
+```
+
+```java
+@Entity
+public class CarritoItem {
+    private Long id;
+    
+    @ManyToOne
+    private Carrito carrito;
+    
+    @ManyToOne
+    private Producto producto;
+    
+    private Integer cantidad;
+}
+```
+
+<Tip>
+The `orphanRemoval = true` setting ensures that when items are removed from the cart, they're automatically deleted from the database.
+</Tip>
+
+## Getting a User's Cart
+
+```http
+GET /api/carrito/{usuarioId}
+Authorization: Bearer {token}
+```
+
+Returns the user's active cart. If no cart exists, one is automatically created:
+
+```java
+@GetMapping("/{usuarioId}")
+public ResponseEntity<Carrito> getCarrito(@PathVariable Long usuarioId) {
+    return ResponseEntity.ok(carritoService.obtenerOCrearCarrito(usuarioId));
+}
+```
+
+**Implementation**:
+
+```java
+@Transactional
+public Carrito obtenerOCrearCarrito(Long usuarioId) {
+    return carritoRepository.findByUsuarioId(usuarioId).orElseGet(() -> {
+        Usuario usuario = usuarioRepository.findById(usuarioId)
+            .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        
+        Carrito nuevoCarrito = new Carrito();
+        nuevoCarrito.setUsuario(usuario);
+        return carritoRepository.save(nuevoCarrito);
+    });
+}
+```
+
+**Response Example**:
+
+```json
+{
+  "id": 12,
+  "usuario": {
+    "id": 5,
+    "nombre": "John Doe",
+    "email": "john@example.com"
+  },
+  "items": [
+    {
+      "id": 45,
+      "producto": {
+        "id": 10,
+        "nombre": "MacBook Pro",
+        "precio": 1999.99,
+        "imagenUrl": "..."
+      },
+      "cantidad": 1
+    },
+    {
+      "id": 46,
+      "producto": {
+        "id": 15,
+        "nombre": "Magic Mouse",
+        "precio": 79.99,
+        "imagenUrl": "..."
+      },
+      "cantidad": 2
+    }
+  ]
+}
+```
+
+## Adding Items to Cart
+
+```http
+POST /api/carrito/{usuarioId}/agregar?productoId={id}&cantidad={qty}
+Authorization: Bearer {token}
+```
+
+**Example**: `POST /api/carrito/5/agregar?productoId=10&cantidad=2`
+
+Adds a product to the cart. If the product already exists in the cart, the quantity is increased:
+
+```java
+@PostMapping("/{usuarioId}/agregar")
+public ResponseEntity<Carrito> agregar(
+    @PathVariable Long usuarioId,
+    @RequestParam Long productoId,
+    @RequestParam Integer cantidad
+) {
+    return ResponseEntity.ok(
+        carritoService.agregarProducto(usuarioId, productoId, cantidad)
+    );
+}
+```
+
+**Implementation**:
+
+```java
+@Transactional
+public Carrito agregarProducto(Long usuarioId, Long productoId, Integer cantidad) {
+    Carrito carrito = obtenerOCrearCarrito(usuarioId);
+    Producto producto = productRepository.findById(productoId)
+        .orElseThrow(() -> new RuntimeException("Producto no encontrado"));
+    
+    // Check if product already in cart
+    carrito.getItems().stream()
+        .filter(item -> item.getProducto().getId().equals(productoId))
+        .findFirst()
+        .ifPresentOrElse(
+            // If exists, increment quantity
+            item -> item.setCantidad(item.getCantidad() + cantidad),
+            // If new, add to cart
+            () -> {
+                CarritoItem nuevoItem = new CarritoItem();
+                nuevoItem.setProducto(producto);
+                nuevoItem.setCantidad(cantidad);
+                nuevoItem.setCarrito(carrito);
+                carrito.getItems().add(nuevoItem);
+            }
+        );
+    
+    return carritoRepository.save(carrito);
+}
+```
+
+<Note>
+The system automatically handles both new items and quantity updates for existing items in a single operation.
+</Note>
+
+## Removing Items from Cart
+
+```http
+DELETE /api/carrito/{usuarioId}/eliminar/{productoId}
+Authorization: Bearer {token}
+```
+
+**Example**: `DELETE /api/carrito/5/eliminar/10`
+
+Removes a specific product from the cart:
+
+```java
+@DeleteMapping("/{usuarioId}/eliminar/{productoId}")
+public ResponseEntity<Carrito> eliminarProducto(
+    @PathVariable Long usuarioId,
+    @PathVariable Long productoId
+) {
+    return ResponseEntity.ok(
+        carritoService.eliminarProducto(usuarioId, productoId)
+    );
+}
+```
+
+**Implementation**:
+
+```java
+@Transactional
+public Carrito eliminarProducto(Long usuarioId, Long productoId) {
+    Carrito carrito = carritoRepository.findByUsuarioId(usuarioId)
+        .orElseThrow(() -> new RuntimeException(
+            "Carrito no encontrado para el usuario: " + usuarioId
+        ));
+    
+    // Remove item from collection
+    boolean removido = carrito.getItems().removeIf(item ->
+        item.getProducto().getId().equals(productoId)
+    );
+    
+    if (removido) {
+        // orphanRemoval = true automatically deletes the item
+        return carritoRepository.save(carrito);
+    } else {
+        throw new RuntimeException("El producto no estaba en el carrito");
+    }
+}
+```
+
+<Tip>
+To update quantity without removing, use the add endpoint with the desired final quantity difference.
+</Tip>
+
+## Clearing the Cart
+
+```http
+DELETE /api/carrito/{usuarioId}/limpiar
+Authorization: Bearer {token}
+```
+
+Removes all items from the cart:
+
+```java
+@DeleteMapping("/{usuarioId}/limpiar")
+public ResponseEntity<Void> limpiar(@PathVariable Long usuarioId) {
+    carritoService.limpiarCarrito(usuarioId);
+    return ResponseEntity.ok().build();
+}
+```
+
+**Implementation**:
+
+```java
+@Transactional
+public void limpiarCarrito(Long usuarioId) {
+    carritoRepository.findByUsuarioId(usuarioId).ifPresent(carrito -> {
+        carrito.getItems().clear();
+        carritoRepository.save(carrito);
+    });
+}
+```
+
+## Checkout Process
+
+The checkout converts the shopping cart into a finalized order:
+
+```http
+POST /api/carrito/{usuarioId}/checkout
+Authorization: Bearer {token}
+```
+
+**Example**: `POST /api/carrito/5/checkout`
+
+```java
+@PostMapping("/{usuarioId}/checkout")
+public ResponseEntity<?> finalizarCompra(@PathVariable Long usuarioId) {
+    try {
+        Pedido pedido = carritoService.convertirCarritoEnPedido(usuarioId);
+        return ResponseEntity.ok(pedido);
+    } catch (RuntimeException e) {
+        return ResponseEntity.badRequest().body(e.getMessage());
+    }
+}
+```
+
+### Checkout Implementation
+
+<Steps>
+  <Step title="Retrieve cart">
+    Load the user's cart with all items
+  </Step>
+  
+  <Step title="Validate cart not empty">
+    Ensure cart has at least one item
+  </Step>
+  
+  <Step title="Convert to order">
+    Map `CarritoItem` objects to `PedidoDetalle` objects
+  </Step>
+  
+  <Step title="Process order">
+    Call order service to validate stock, calculate total, send email
+  </Step>
+  
+  <Step title="Clear cart">
+    Empty the cart after successful order creation
+  </Step>
+  
+  <Step title="Return order">
+    Return the completed order object to the client
+  </Step>
+</Steps>
+
+**Code Implementation**:
+
+```java
+@Transactional
+public Pedido convertirCarritoEnPedido(Long usuarioId) {
+    Carrito carrito = carritoRepository.findByUsuarioId(usuarioId)
+        .orElseThrow(() -> new RuntimeException("Carrito no encontrado"));
+    
+    if (carrito.getItems().isEmpty()) {
+        throw new RuntimeException("El carrito está vacío");
+    }
+    
+    // 1. Create new order
+    Pedido nuevoPedido = new Pedido();
+    nuevoPedido.setUsuario(carrito.getUsuario());
+    
+    // 2. Map cart items to order details
+    List<PedidoDetalle> detalles = carrito.getItems().stream().map(item -> {
+        PedidoDetalle detalle = new PedidoDetalle();
+        detalle.setProducto(item.getProducto());
+        detalle.setCantidad(item.getCantidad());
+        detalle.setPedido(nuevoPedido);
+        return detalle;
+    }).collect(Collectors.toList());
+    
+    nuevoPedido.setDetalles(detalles);
+    
+    // 3. Execute order creation logic (stock validation, total calculation, email)
+    Pedido pedidoFinalizado = pedidoService.createPedido(nuevoPedido);
+    
+    // 4. Clear the cart
+    carrito.getItems().clear();
+    carritoRepository.save(carrito);
+    
+    return pedidoFinalizado;
+}
+```
+
+<Warning>
+If stock validation fails during checkout, the entire transaction is rolled back and the cart remains intact.
+</Warning>
+
+### Checkout Response
+
+Successful checkout returns a complete order object:
+
+```json
+{
+  "id": 42,
+  "usuario": { ... },
+  "fechaPedido": "2026-03-05T14:32:10",
+  "estado": "PENDIENTE",
+  "total": 2159.97,
+  "detalles": [
+    {
+      "id": 78,
+      "producto": {
+        "id": 10,
+        "nombre": "MacBook Pro"
+      },
+      "cantidad": 1,
+      "precioUnitario": 1999.99
+    },
+    {
+      "id": 79,
+      "producto": {
+        "id": 15,
+        "nombre": "Magic Mouse"
+      },
+      "cantidad": 2,
+      "precioUnitario": 79.99
+    }
+  ]
+}
+```
+
+## Integration with Order System
+
+The cart checkout seamlessly integrates with the order management system:
+
+- **Stock Validation**: Reuses order service logic to check product availability
+- **Total Calculation**: Automatically computes order total from current prices
+- **Email Notification**: Triggers purchase confirmation email
+- **Stock Deduction**: Reduces inventory for purchased items
+- **Order Tracking**: Creates trackable order with status management
+
+<Note>
+Prices are captured at checkout time, not when items are added to cart. This ensures accurate pricing if products change price before purchase.
+</Note>
+
+## API Reference
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | `/api/carrito/{usuarioId}` | Get user's cart | USER |
+| POST | `/api/carrito/{usuarioId}/agregar` | Add item to cart | USER |
+| DELETE | `/api/carrito/{usuarioId}/eliminar/{productoId}` | Remove item from cart | USER |
+| DELETE | `/api/carrito/{usuarioId}/limpiar` | Clear entire cart | USER |
+| POST | `/api/carrito/{usuarioId}/checkout` | Convert cart to order | USER |
+
+## User Flow Example
+
+<Steps>
+  <Step title="Browse products">
+    Customer views product catalog and selects items
+  </Step>
+  
+  <Step title="Add to cart">
+    `POST /api/carrito/5/agregar?productoId=10&cantidad=1`
+  </Step>
+  
+  <Step title="Continue shopping">
+    Add more items: `POST /api/carrito/5/agregar?productoId=15&cantidad=2`
+  </Step>
+  
+  <Step title="Review cart">
+    `GET /api/carrito/5` to display cart summary
+  </Step>
+  
+  <Step title="Adjust quantities">
+    Remove unwanted item: `DELETE /api/carrito/5/eliminar/15`
+  </Step>
+  
+  <Step title="Checkout">
+    `POST /api/carrito/5/checkout` creates order and clears cart
+  </Step>
+</Steps>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Client-Side Total" icon="calculator">
+    Calculate cart totals on the frontend for instant feedback, but always use server prices at checkout.
+  </Card>
+  
+  <Card title="Stock Warnings" icon="triangle-exclamation">
+    Check product availability before checkout and warn users of out-of-stock items.
+  </Card>
+  
+  <Card title="Session Persistence" icon="floppy-disk">
+    Cart data persists across sessions. Users can return later to complete purchases.
+  </Card>
+  
+  <Card title="Price Updates" icon="tag">
+    Prices are captured at checkout, so cart displays should show current prices, not cached values.
+  </Card>
+</CardGroup>
+
+## Error Handling
+
+Common error scenarios:
+
+<Tabs>
+  <Tab title="Empty Cart">
+    **Scenario**: User attempts checkout with no items
+    
+    **Response**: `400 Bad Request`
+    ```json
+    "El carrito está vacío"
+    ```
+  </Tab>
+  
+  <Tab title="Out of Stock">
+    **Scenario**: Product quantity exceeds available stock
+    
+    **Response**: `400 Bad Request`
+    ```json
+    "Stock insuficiente para: MacBook Pro"
+    ```
+    
+    Cart remains intact for user to adjust quantities.
+  </Tab>
+  
+  <Tab title="Product Not Found">
+    **Scenario**: Attempting to add non-existent product
+    
+    **Response**: `400 Bad Request`
+    ```json
+    "Producto no encontrado"
+    ```
+  </Tab>
+  
+  <Tab title="User Not Found">
+    **Scenario**: Invalid user ID in request
+    
+    **Response**: `400 Bad Request`
+    ```json
+    "Usuario no encontrado"
+    ```
+  </Tab>
+</Tabs>
+
+<Tip>
+Always handle these error responses on the client side to provide helpful user feedback.
+</Tip>

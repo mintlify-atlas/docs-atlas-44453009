@@ -1,0 +1,366 @@
+---
+title: "Categories API"
+description: "Complete API reference for product category management"
+---
+
+## Overview
+
+The Categories API provides endpoints for managing product categories, including CRUD operations and active category filtering.
+
+**Base URL**: `/api/categorias`
+
+**Source**: `CategoriaController.java`
+
+## Authentication
+
+<Note>
+- **Public endpoints**: GET requests (list, view)
+- **Admin endpoints**: POST, PUT, DELETE operations (no explicit `@PreAuthorize` in source, but should be admin-only in production)
+</Note>
+
+---
+
+## Endpoints
+
+### List All Categories
+
+```http
+GET /api/categorias
+```
+
+Retrieve all categories (including inactive categories).
+
+**Authentication**: None (public endpoint)
+
+**Response**: `200 OK` - Array of category objects
+
+<ResponseField name="categories" type="array">
+  <Expandable title="Category Object">
+    <ResponseField name="id" type="long">Category ID</ResponseField>
+    <ResponseField name="nombre" type="string">Category name</ResponseField>
+    <ResponseField name="descripcion" type="string">Category description</ResponseField>
+    <ResponseField name="activo" type="boolean">Active status flag</ResponseField>
+  </Expandable>
+</ResponseField>
+
+**Example Request**:
+
+<CodeGroup>
+```bash cURL
+curl -X GET http://localhost:8080/api/categorias
+```
+
+```javascript JavaScript
+fetch('http://localhost:8080/api/categorias')
+  .then(res => res.json())
+  .then(categories => console.log(categories));
+```
+
+```python Python
+import requests
+
+response = requests.get('http://localhost:8080/api/categorias')
+categories = response.json()
+```
+</CodeGroup>
+
+---
+
+### List Active Categories
+
+```http
+GET /api/categorias/activos
+```
+
+Retrieve only active categories (where `activo = true`).
+
+**Authentication**: None (public endpoint)
+
+**Response**: `200 OK` - Array of active category objects
+
+**Example Request**:
+
+```bash cURL
+curl -X GET http://localhost:8080/api/categorias/activos
+```
+
+<Tip>
+Use this endpoint for public-facing category navigation to hide inactive/archived categories from customers.
+</Tip>
+
+---
+
+### Get Category by ID
+
+```http
+GET /api/categorias/{id}
+```
+
+Retrieve a specific category by ID.
+
+**Authentication**: None (public endpoint)
+
+<ParamField path="id" type="long" required>
+  Category ID
+</ParamField>
+
+**Responses**:
+- `200 OK` - Category object
+- `404 Not Found` - Category does not exist
+
+**Example Request**:
+
+```bash cURL
+curl -X GET http://localhost:8080/api/categorias/1
+```
+
+---
+
+### Create Category
+
+```http
+POST /api/categorias
+```
+
+Create a new product category.
+
+**Authentication**: Should require `ROLE_ADMIN` (not explicitly enforced in source)
+
+**Request Body**:
+
+<ParamField body="nombre" type="string" required>
+  Category name
+</ParamField>
+
+<ParamField body="descripcion" type="string">
+  Category description
+</ParamField>
+
+<ParamField body="activo" type="boolean">
+  Active status (default: true)
+</ParamField>
+
+**Response**: `200 OK` - Created category object with generated ID
+
+**Example Request**:
+
+```bash cURL
+curl -X POST http://localhost:8080/api/categorias \
+  -H "Authorization: Bearer ADMIN_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nombre": "Laptops",
+    "descripcion": "Portable computers and notebooks",
+    "activo": true
+  }'
+```
+
+**Example Response**:
+
+```json
+{
+  "id": 5,
+  "nombre": "Laptops",
+  "descripcion": "Portable computers and notebooks",
+  "activo": true
+}
+```
+
+---
+
+### Update Category
+
+```http
+PUT /api/categorias/{id}
+```
+
+Update an existing category.
+
+**Authentication**: Should require `ROLE_ADMIN`
+
+<ParamField path="id" type="long" required>
+  Category ID to update
+</ParamField>
+
+**Request Body**: Category object with updated fields
+
+**Responses**:
+- `200 OK` - Updated category object
+- `404 Not Found` - Category does not exist
+
+**Example Request**:
+
+```bash cURL
+curl -X PUT http://localhost:8080/api/categorias/5 \
+  -H "Authorization: Bearer ADMIN_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nombre": "Premium Laptops",
+    "descripcion": "High-end portable computers",
+    "activo": true
+  }'
+```
+
+---
+
+### Delete Category
+
+```http
+DELETE /api/categorias/{id}
+```
+
+Delete a category.
+
+**Authentication**: Should require `ROLE_ADMIN`
+
+<ParamField path="id" type="long" required>
+  Category ID to delete
+</ParamField>
+
+**Responses**:
+- `200 OK` - Category successfully deleted
+- `400 Bad Request` - Cannot delete (may have associated products)
+
+**Example Request**:
+
+```bash cURL
+curl -X DELETE http://localhost:8080/api/categorias/5 \
+  -H "Authorization: Bearer ADMIN_JWT_TOKEN"
+```
+
+<Warning>
+Deleting a category may fail if products are still associated with it. Consider implementing a soft delete (setting `activo = false`) instead of hard deletion.
+</Warning>
+
+---
+
+## Category Model
+
+The complete category object structure:
+
+```json
+{
+  "id": 1,
+  "nombre": "Electronics",
+  "descripcion": "Electronic devices and accessories",
+  "activo": true
+}
+```
+
+---
+
+## Integration Examples
+
+### Frontend: Display Category Navigation
+
+```javascript JavaScript
+async function loadCategoryMenu() {
+  const response = await fetch('http://localhost:8080/api/categorias/activos');
+  const categories = await response.json();
+  
+  const menuHTML = categories.map(cat => 
+    `<a href="/products?category=${cat.id}">${cat.nombre}</a>`
+  ).join('');
+  
+  document.getElementById('category-menu').innerHTML = menuHTML;
+}
+```
+
+### Admin: Create New Category
+
+```javascript JavaScript
+async function createCategory(categoryData, token) {
+  const response = await fetch('http://localhost:8080/api/categorias', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(categoryData)
+  });
+  
+  return response.json();
+}
+
+// Usage
+await createCategory({
+  nombre: 'Smartphones',
+  descripcion: 'Mobile phones and accessories',
+  activo: true
+}, adminToken);
+```
+
+### Filter Products by Category
+
+```javascript JavaScript
+async function getProductsByCategory(categoryId) {
+  const response = await fetch(`http://localhost:8080/api/productos/categoria/${categoryId}`);
+  return response.json();
+}
+
+// Usage: Get all products in "Laptops" category
+const laptops = await getProductsByCategory(1);
+```
+
+---
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Navigation Menu" icon="bars">
+    Use `/activos` endpoint to populate the category navigation menu on the storefront.
+  </Card>
+  
+  <Card title="Product Filtering" icon="filter">
+    Combine with Products API to filter products by category.
+  </Card>
+  
+  <Card title="Admin Management" icon="screwdriver-wrench">
+    Create, update, and organize product categories from the admin panel.
+  </Card>
+  
+  <Card title="Inventory Organization" icon="box-archive">
+    Organize products into logical groups for easier inventory management.
+  </Card>
+</CardGroup>
+
+---
+
+## Best Practices
+
+<Accordion title="Use Active/Inactive Instead of Deleting">
+  Instead of permanently deleting categories, toggle the `activo` flag to false. This preserves data integrity and allows you to restore categories later.
+</Accordion>
+
+<Accordion title="Check for Associated Products">
+  Before deleting a category, verify that no products are assigned to it. Implement cascade rules or reassign products to a different category.
+</Accordion>
+
+<Accordion title="SEO-Friendly URLs">
+  Consider adding a `slug` field (similar to products) for SEO-friendly category URLs like `/categories/electronics` instead of `/categories/1`.
+</Accordion>
+
+---
+
+## Error Responses
+
+| Status Code | Description |
+|-------------|-------------|
+| `400 Bad Request` | Cannot delete category with associated products |
+| `401 Unauthorized` | Missing or invalid JWT token |
+| `403 Forbidden` | User does not have admin role |
+| `404 Not Found` | Category does not exist |
+| `500 Internal Server Error` | Server error |
+
+---
+
+## Related Endpoints
+
+<CardGroup cols={2}>
+  <Card title="Products API" icon="box" href="/api/products-api">
+    Manage products within categories
+  </Card>
+  <Card title="Products by Category" icon="filter" href="/api/products-api#list-products-by-category">
+    Filter products by category ID
+  </Card>
+</CardGroup>

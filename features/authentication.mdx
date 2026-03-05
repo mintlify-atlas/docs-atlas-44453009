@@ -1,0 +1,343 @@
+---
+title: "Authentication & Security"
+description: "RSA+JWT authentication with email verification and password recovery"
+---
+
+## Overview
+
+TechStore implements a robust authentication system using **RSA-encrypted JWT tokens** with **email verification** and **password recovery** flows. All passwords are encrypted using BCrypt, and user accounts require email confirmation before login.
+
+<Note>
+The authentication system uses Spring Security with OAuth2 Resource Server and stateless session management.
+</Note>
+
+## Security Architecture
+
+### RSA Key Pair Generation
+
+The system generates a 2048-bit RSA key pair on startup for signing and verifying JWT tokens:
+
+```java
+private static KeyPair generateRsaKey() {
+    try {
+        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
+        keyPairGenerator.initialize(2048);
+        return keyPairGenerator.generateKeyPair();
+    } catch (Exception ex) {
+        throw new IllegalStateException(ex);
+    }
+}
+```
+
+### JWT Token Structure
+
+Tokens are generated with the following claims:
+
+- **Issuer**: `self`
+- **Subject**: User's email address
+- **Expiry**: 10 hours (36000 seconds)
+- **Scope**: User roles (e.g., `ROLE_USER`, `ROLE_ADMIN`)
+
+```java
+JwtClaimsSet claims = JwtClaimsSet.builder()
+    .issuer("self")
+    .issuedAt(now)
+    .expiresAt(now.plusSeconds(36000L))
+    .subject(username)
+    .claim("scope", scope)
+    .build();
+```
+
+## User Registration Flow
+
+<Steps>
+  <Step title="User submits registration">
+    POST request to `/api/auth/register` with user details
+  </Step>
+  
+  <Step title="Password encryption">
+    Password is encrypted using BCrypt before storage
+  </Step>
+  
+  <Step title="Generate verification token">
+    A unique UUID token is generated and stored with the user
+  </Step>
+  
+  <Step title="Send verification email">
+    HTML email sent with verification link containing the token
+  </Step>
+  
+  <Step title="Account created (disabled)">
+    User account created with `enabled=false` status
+  </Step>
+</Steps>
+
+### Registration Endpoint
+
+```java
+@PostMapping("/api/auth/register")
+public ResponseEntity<?> registrar(@RequestBody Usuario usuario) {
+    try {
+        Usuario usuarioGuardado = usuarioService.save(usuario);
+        
+        emailService.enviarCorreoVerificacion(
+            usuarioGuardado.getEmail(), 
+            usuarioGuardado.getTokenVerificacion()
+        );
+        
+        return ResponseEntity.ok(Map.of(
+            "message", "Usuario registrado. Revisa tu correo para activar la cuenta."
+        ));
+    } catch (Exception e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(Map.of("error", "Error al registrar: " + e.getMessage()));
+    }
+}
+```
+
+<Warning>
+Users cannot login until they verify their email address. The system checks `enabled` status during authentication.
+</Warning>
+
+## Email Verification
+
+When users click the verification link in their email:
+
+```java
+@GetMapping("/api/auth/verificar")
+public ResponseEntity<String> verificarCuenta(@RequestParam("token") String token) {
+    boolean verificado = usuarioService.verificarToken(token);
+    
+    if (verificado) {
+        // Returns HTML success page
+        return ResponseEntity.ok("<html>...Account activated...</html>");
+    } else {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body("<html>...Invalid or expired token...</html>");
+    }
+}
+```
+
+### Verification Process
+
+1. System looks up user by verification token
+2. Sets `enabled = true`
+3. Clears the `tokenVerificacion` field
+4. Displays success HTML page
+
+## Login Flow
+
+<Steps>
+  <Step title="Submit credentials">
+    POST to `/api/auth/login` with email and password
+  </Step>
+  
+  <Step title="Validate account status">
+    Check if user exists and account is enabled
+  </Step>
+  
+  <Step title="Authenticate">
+    Spring Security authenticates using BCrypt password matching
+  </Step>
+  
+  <Step title="Generate JWT token">
+    RSA-signed JWT token created with user email and roles
+  </Step>
+  
+  <Step title="Return token">
+    Token and user details returned to client
+  </Step>
+</Steps>
+
+### Login Endpoint
+
+```java
+@PostMapping("/api/auth/login")
+public Map<String, String> login(@RequestBody Map<String, String> request) {
+    String email = request.get("email");
+    String password = request.get("password");
+    
+    Usuario usuario = usuarioService.findUserByEmail(email)
+        .orElseThrow(() -> new ResponseStatusException(
+            HttpStatus.NOT_FOUND, "Usuario no encontrado"
+        ));
+    
+    // Check if account is enabled
+    if (usuario.getEnabled() == null || !usuario.getEnabled()) {
+        throw new ResponseStatusException(
+            HttpStatus.FORBIDDEN, 
+            "Tu cuenta no está activa. Revisa tu correo."
+        );
+    }
+    
+    Authentication auth = authManager.authenticate(
+        new UsernamePasswordAuthenticationToken(email, password)
+    );
+    
+    String token = jwtUtil.generateToken(
+        auth.getName(), 
+        auth.getAuthorities()
+    );
+    
+    return Map.of(
+        "id", String.valueOf(usuario.getId()),
+        "access_token", token,
+        "email", email,
+        "nombre", usuario.getNombre(),
+        "rol", usuario.getRoles().get(0).getNombre()
+    );
+}
+```
+
+### Response Example
+
+```json
+{
+  "id": "5",
+  "access_token": "eyJhbGciOiJSUzI1NiJ9...",
+  "email": "user@example.com",
+  "nombre": "John Doe",
+  "rol": "ROLE_USER"
+}
+```
+
+<Tip>
+Store the `access_token` in your client application and include it in the `Authorization` header as `Bearer <token>` for subsequent requests.
+</Tip>
+
+## Password Recovery
+
+Users can reset their password through a secure token-based flow:
+
+### Request Password Reset
+
+```java
+@PostMapping("/api/auth/forgot-password")
+public ResponseEntity<?> solicitarRecuperacion(@RequestBody Map<String, String> request) {
+    String email = request.get("email");
+    
+    return usuarioService.findUserByEmail(email).map(user -> {
+        String token = UUID.randomUUID().toString();
+        user.setTokenVerificacion(token);
+        usuarioService.save(user);
+        
+        emailService.enviarCorreoRecuperacion(email, token);
+        
+        return ResponseEntity.ok(Map.of(
+            "message", "Correo de recuperación enviado exitosamente."
+        ));
+    }).orElse(ResponseEntity.status(HttpStatus.NOT_FOUND)
+        .body(Map.of("error", "Email no encontrado.")));
+}
+```
+
+### Reset Password with Token
+
+```java
+@PostMapping("/api/auth/reset-password")
+public ResponseEntity<?> restablecerPassword(@RequestBody Map<String, String> request) {
+    String token = request.get("token");
+    String nuevaPassword = request.get("nuevaPassword");
+    
+    boolean exito = usuarioService.cambiarPasswordConToken(
+        token, 
+        passwordEncoder.encode(nuevaPassword)
+    );
+    
+    if (exito) {
+        return ResponseEntity.ok(Map.of(
+            "message", "Tu contraseña ha sido actualizada correctamente."
+        ));
+    }
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        .body(Map.of("error", "El enlace ha expirado o es inválido."));
+}
+```
+
+<Warning>
+Tokens are single-use only. After password reset, the token is cleared from the database.
+</Warning>
+
+## Authorization Rules
+
+The security configuration defines role-based access control:
+
+### Public Routes
+- `/api/auth/**` - All authentication endpoints
+- `GET /api/productos/**` - View products
+- `GET /api/categorias/**` - View categories
+- Static resources: `/index.html`, `/css/**`, `/js/**`
+
+### Authenticated User Routes
+- `GET/PUT/PATCH/DELETE /api/usuarios/{id}` - Own profile management
+- `POST /api/pedidos/**` - Create orders
+- `GET /api/pedidos/usuario/**` - View own orders
+
+### Admin-Only Routes
+- `GET /api/pedidos` - View all orders
+- `PUT/DELETE /api/pedidos/**` - Manage all orders
+- `POST/PUT/DELETE /api/productos/**` - Manage products
+- `/api/usuarios/**` - User management
+
+```java
+.authorizeHttpRequests(auth -> auth
+    .requestMatchers("/api/auth/**").permitAll()
+    .requestMatchers(HttpMethod.GET, "/api/productos/**").permitAll()
+    .requestMatchers(HttpMethod.POST, "/api/pedidos/**").authenticated()
+    .requestMatchers("/api/usuarios/**").hasAuthority("ROLE_ADMIN")
+    .anyRequest().authenticated()
+)
+```
+
+## CORS Configuration
+
+The system allows cross-origin requests from development environments:
+
+```java
+.cors(cors -> cors.configurationSource(request -> {
+    var cfg = new CorsConfiguration();
+    cfg.setAllowedOrigins(List.of(
+        "http://localhost:63342", 
+        "http://127.0.0.1:5500",
+        "http://localhost:8080"
+    ));
+    cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+    cfg.setAllowedHeaders(List.of("*"));
+    cfg.setAllowCredentials(true);
+    return cfg;
+}))
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Token Security" icon="shield">
+    Tokens expire after 10 hours. Implement refresh token logic for production use.
+  </Card>
+  
+  <Card title="Password Policy" icon="lock">
+    BCrypt automatically handles salting and hashing with industry-standard security.
+  </Card>
+  
+  <Card title="Email Verification" icon="envelope">
+    Always verify emails before enabling accounts to prevent spam and fake registrations.
+  </Card>
+  
+  <Card title="Error Handling" icon="triangle-exclamation">
+    Never expose internal error details. Return generic messages to prevent information leakage.
+  </Card>
+</CardGroup>
+
+## Related Endpoints
+
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---------------|
+| POST | `/api/auth/register` | Register new user | No |
+| GET | `/api/auth/verificar` | Verify email with token | No |
+| POST | `/api/auth/login` | Login and get JWT | No |
+| POST | `/api/auth/forgot-password` | Request password reset | No |
+| POST | `/api/auth/reset-password` | Reset password with token | No |
+
+<Tip>
+For testing, you can check token contents at [jwt.io](https://jwt.io) to debug authentication issues.
+</Tip>

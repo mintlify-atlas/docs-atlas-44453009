@@ -1,0 +1,413 @@
+---
+title: "Products API"
+description: "Complete API reference for product management endpoints"
+---
+
+## Overview
+
+The Products API provides endpoints for managing the product catalog, including CRUD operations, search, filtering, and image gallery management.
+
+**Base URL**: `/api/productos`
+
+**Source**: `ProductController.java`
+
+## Authentication
+
+<Note>
+- **Public endpoints**: GET requests (list, search, view)
+- **Admin-only endpoints**: POST, PUT, DELETE operations require `ROLE_ADMIN`
+</Note>
+
+## Endpoints
+
+### List All Products
+
+```http
+GET /api/productos
+```
+
+Retrieve all products in the catalog (including inactive products).
+
+**Authentication**: None (public endpoint)
+
+**Response**: `200 OK`
+
+<ResponseField name="products" type="array">
+  Array of product objects
+  <Expandable title="Product Object">
+    <ResponseField name="id" type="long">Product ID</ResponseField>
+    <ResponseField name="nombre" type="string">Product name</ResponseField>
+    <ResponseField name="descripcion" type="string">Product description</ResponseField>
+    <ResponseField name="precio" type="double">Product price</ResponseField>
+    <ResponseField name="stock" type="integer">Available stock quantity</ResponseField>
+    <ResponseField name="categoria" type="object">Category object with id and nombre</ResponseField>
+    <ResponseField name="imagenes" type="array">Array of image URL objects</ResponseField>
+    <ResponseField name="destacado" type="boolean">Featured product flag</ResponseField>
+    <ResponseField name="activo" type="boolean">Active status (soft delete)</ResponseField>
+    <ResponseField name="slug" type="string">URL-friendly product identifier</ResponseField>
+  </Expandable>
+</ResponseField>
+
+**Example Request**:
+
+<CodeGroup>
+```bash cURL
+curl -X GET http://localhost:8080/api/productos
+```
+
+```javascript JavaScript
+fetch('http://localhost:8080/api/productos')
+  .then(res => res.json())
+  .then(products => console.log(products));
+```
+
+```python Python
+import requests
+
+response = requests.get('http://localhost:8080/api/productos')
+products = response.json()
+```
+</CodeGroup>
+
+---
+
+### List Active Products
+
+```http
+GET /api/productos/activos
+```
+
+Retrieve only active products (where `activo = true`).
+
+**Authentication**: None (public endpoint)
+
+**Response**: `200 OK` - Array of active product objects
+
+---
+
+### List Featured Products
+
+```http
+GET /api/productos/destacados
+```
+
+Retrieve products marked as featured (`destacado = true`).
+
+**Authentication**: None (public endpoint)
+
+**Response**: `200 OK` - Array of featured product objects
+
+**Use Case**: Display featured products on the homepage or promotional sections.
+
+---
+
+### Get Product by ID
+
+```http
+GET /api/productos/{id}
+```
+
+**Authentication**: None (public endpoint)
+
+<ParamField path="id" type="long" required>
+  Product ID
+</ParamField>
+
+**Responses**:
+- `200 OK` - Product object
+- `404 Not Found` - Product does not exist
+
+**Example Request**:
+
+```bash cURL
+curl -X GET http://localhost:8080/api/productos/1
+```
+
+---
+
+### Search Products by Name
+
+```http
+GET /api/productos/buscar?nombre={query}
+```
+
+Search products by name (case-insensitive partial match).
+
+**Authentication**: None (public endpoint)
+
+<ParamField query="nombre" type="string" required>
+  Search query string
+</ParamField>
+
+**Response**: `200 OK` - Array of matching products
+
+**Example Request**:
+
+```bash cURL
+curl -X GET "http://localhost:8080/api/productos/buscar?nombre=laptop"
+```
+
+---
+
+### List Products by Category
+
+```http
+GET /api/productos/categoria/{id}
+```
+
+Retrieve all products in a specific category.
+
+**Authentication**: None (public endpoint)
+
+<ParamField path="id" type="long" required>
+  Category ID
+</ParamField>
+
+**Response**: `200 OK` - Array of products in the category
+
+---
+
+### Get Similar Products
+
+```http
+GET /api/productos/{id}/similares
+```
+
+Retrieve products similar to the specified product (based on category).
+
+**Authentication**: None (public endpoint)
+
+<ParamField path="id" type="long" required>
+  Product ID
+</ParamField>
+
+**Response**: `200 OK` - Array of similar products
+
+**Use Case**: Display "You may also like" or "Related products" sections.
+
+---
+
+### Create Product
+
+```http
+POST /api/productos
+```
+
+**Authentication**: Required - `ROLE_ADMIN`
+
+**Request Body**:
+
+<ParamField body="nombre" type="string" required>
+  Product name
+</ParamField>
+
+<ParamField body="descripcion" type="string" required>
+  Product description
+</ParamField>
+
+<ParamField body="precio" type="double" required>
+  Product price
+</ParamField>
+
+<ParamField body="stock" type="integer" required>
+  Initial stock quantity
+</ParamField>
+
+<ParamField body="categoria" type="object" required>
+  Category object with `id` field
+</ParamField>
+
+<ParamField body="destacado" type="boolean">
+  Featured flag (default: false)
+</ParamField>
+
+**Response**: `200 OK` - Created product object with generated ID and slug
+
+**Example Request**:
+
+```bash cURL
+curl -X POST http://localhost:8080/api/productos \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nombre": "Laptop Dell XPS 15",
+    "descripcion": "High-performance laptop with Intel i7",
+    "precio": 1299.99,
+    "stock": 10,
+    "categoria": {"id": 1},
+    "destacado": true
+  }'
+```
+
+<Note>
+The system automatically generates a URL-friendly `slug` from the product name (e.g., "laptop-dell-xps-15").
+</Note>
+
+---
+
+### Update Product
+
+```http
+PUT /api/productos/{id}
+```
+
+**Authentication**: Required - `ROLE_ADMIN`
+
+<ParamField path="id" type="long" required>
+  Product ID to update
+</ParamField>
+
+**Request Body**: Same as Create Product (all fields)
+
+**Responses**:
+- `200 OK` - Updated product object
+- `404 Not Found` - Product does not exist
+
+---
+
+### Update Product Gallery
+
+```http
+PUT /api/productos/{id}/galeria
+```
+
+Update the image gallery for a product. This endpoint replaces all existing images.
+
+**Authentication**: Required - `ROLE_ADMIN`
+
+<ParamField path="id" type="long" required>
+  Product ID
+</ParamField>
+
+**Request Body**: Array of image URL strings
+
+**Example Request**:
+
+```bash cURL
+curl -X PUT http://localhost:8080/api/productos/1/galeria \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '[
+    "https://example.com/images/product1-front.jpg",
+    "https://example.com/images/product1-back.jpg",
+    "https://example.com/images/product1-detail.jpg"
+  ]'
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "message": "Galería actualizada correctamente"
+}
+```
+
+<Warning>
+This operation uses **orphan removal** - any images not included in the new array will be permanently deleted from the database.
+</Warning>
+
+---
+
+### Soft Delete Product
+
+```http
+DELETE /api/productos/{id}
+```
+
+Soft delete a product by setting `activo = false`. The product remains in the database but is hidden from public listings.
+
+**Authentication**: Not specified (should be admin-only in production)
+
+<ParamField path="id" type="long" required>
+  Product ID
+</ParamField>
+
+**Response**: `200 OK`
+
+```json
+{
+  "message": "Estado del producto actualizado"
+}
+```
+
+---
+
+### Permanently Delete Product
+
+```http
+DELETE /api/productos/{id}/definitivo
+```
+
+Permanently remove a product from the database.
+
+**Authentication**: Required - `ROLE_ADMIN`
+
+<ParamField path="id" type="long" required>
+  Product ID
+</ParamField>
+
+**Response**: `204 No Content`
+
+<Warning>
+This action is **irreversible**. All associated data (images, order details) will be affected. Use soft delete unless absolutely necessary.
+</Warning>
+
+---
+
+## Error Responses
+
+| Status Code | Description |
+|-------------|-------------|
+| `400 Bad Request` | Invalid request body or parameters |
+| `401 Unauthorized` | Missing or invalid JWT token |
+| `403 Forbidden` | User does not have `ROLE_ADMIN` |
+| `404 Not Found` | Product does not exist |
+| `500 Internal Server Error` | Server error |
+
+---
+
+## Integration Examples
+
+### Frontend: Display Product Catalog
+
+```javascript JavaScript
+async function loadProducts() {
+  const response = await fetch('http://localhost:8080/api/productos/activos');
+  const products = await response.json();
+  
+  products.forEach(product => {
+    console.log(`${product.nombre} - $${product.precio}`);
+    console.log(`Stock: ${product.stock}`);
+  });
+}
+```
+
+### Admin: Add New Product
+
+```javascript JavaScript
+async function createProduct(productData, token) {
+  const response = await fetch('http://localhost:8080/api/productos', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(productData)
+  });
+  
+  return response.json();
+}
+```
+
+---
+
+## Related Endpoints
+
+<CardGroup cols={2}>
+  <Card title="Categories API" icon="folder" href="/api/categories-api">
+    Manage product categories
+  </Card>
+  <Card title="Cart API" icon="shopping-cart" href="/api/cart-api">
+    Add products to shopping cart
+  </Card>
+</CardGroup>

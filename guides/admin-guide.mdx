@@ -1,0 +1,706 @@
+---
+title: Administrator Guide
+description: Complete guide for TechStore administrators to manage products, categories, orders, and users
+---
+
+## TechStore Admin Panel Overview
+
+This guide covers all administrative functions for managing your TechStore platform, including inventory management, order processing, analytics, and user administration.
+
+---
+
+## Accessing the Admin Panel
+
+### Admin Login Requirements
+
+<Note type="important">
+Only users with the **ROLE_ADMIN** role can access the admin panel.
+</Note>
+
+<Steps>
+  <Step title="Log In as Admin">
+    Navigate to the login page and sign in using your admin credentials.
+  </Step>
+  
+  <Step title="Access Admin Panel">
+    After successful login:
+    - From the main storefront, click the **"PANEL ADMINISTRADOR"** floating button (bottom left)
+    - Or navigate directly to `admin-pedidos.html`
+  </Step>
+  
+  <Step title="Navigate Sections">
+    Use the top navigation bar to switch between:
+    - **Pedidos** (Orders/Dashboard)
+    - **Inventario** (Inventory)
+    - **Categorías** (Categories)
+    - **Usuarios** (Users)
+  </Step>
+</Steps>
+
+---
+
+## Dashboard & Sales Analytics
+
+The default admin view provides comprehensive sales metrics and order management.
+
+### Key Metrics Overview
+
+<CardGroup cols={2}>
+  <Card title="Total Sales" icon="dollar-sign">
+    Cumulative revenue from all orders in the selected time period
+  </Card>
+  <Card title="Order Count" icon="shopping-cart">
+    Total number of orders placed
+  </Card>
+  <Card title="Average Ticket" icon="receipt">
+    Average order value (Total Sales ÷ Number of Orders)
+  </Card>
+  <Card title="Critical Stock" icon="exclamation-triangle">
+    Number of products with low inventory levels
+  </Card>
+</CardGroup>
+
+### Analytics Charts
+
+Click **"Ver Gráficos"** to expand the analytics panel:
+
+<Accordion title="Sales by Category Chart">
+  A pie chart visualization showing revenue distribution across product categories.
+  
+  **Use this to:**
+  - Identify best-selling categories
+  - Plan inventory purchases
+  - Make marketing decisions
+</Accordion>
+
+<Accordion title="Order Status Chart">
+  A bar/doughnut chart displaying order distribution by status.
+  
+  **Shows counts for:**
+  - PENDIENTE (Pending)
+  - PROCESANDO (Processing)
+  - ENVIADO (Shipped)
+  - ENTREGADO (Delivered)
+</Accordion>
+
+---
+
+## Order Management
+
+### Viewing All Orders
+
+The **Pedidos** section displays all customer orders in a sortable table.
+
+**Table Columns:**
+- **ID**: Unique order identifier
+- **Fecha**: Order date and time
+- **Cliente**: Customer name and email
+- **Total**: Order amount in USD
+- **Estado**: Current status with color-coded badge
+- **Acciones**: Action buttons (View Details, Update Status)
+
+### Filtering Orders by Date
+
+<Steps>
+  <Step title="Open Date Picker">
+    Click the **"Rango de fechas"** input field.
+  </Step>
+  
+  <Step title="Select Date Range">
+    Use the Flatpickr calendar to select:
+    - Start date
+    - End date
+  </Step>
+  
+  <Step title="View Filtered Results">
+    Orders automatically filter to the selected date range.
+    Metrics update to reflect only filtered orders.
+  </Step>
+  
+  <Step title="Clear Filters">
+    Click **"Limpiar Filtros"** to reset and show all orders.
+  </Step>
+</Steps>
+
+### Viewing Order Details
+
+<Steps>
+  <Step title="Locate Order">
+    Find the order in the orders table.
+  </Step>
+  
+  <Step title="Open Details Modal">
+    Click the **"Ver"** (view) button in the Actions column.
+  </Step>
+  
+  <Step title="Review Information">
+    The detail modal displays:
+    - Customer name and email
+    - Order date
+    - Current status
+    - Complete product list with quantities and prices
+    - Total order amount
+  </Step>
+</Steps>
+
+### Updating Order Status
+
+<Steps>
+  <Step title="Choose New Status">
+    In the order row, locate the status dropdown or change status button.
+  </Step>
+  
+  <Step title="Select Status">
+    Choose from:
+    - **PENDIENTE**: Order received, awaiting processing
+    - **PROCESANDO**: Order being prepared
+    - **ENVIADO**: Order shipped to customer
+    - **ENTREGADO**: Order delivered successfully
+  </Step>
+  
+  <Step title="Confirm Update">
+    Click to confirm the status change.
+  </Step>
+  
+  <Step title="Verify Update">
+    The status badge updates immediately in the table.
+  </Step>
+</Steps>
+
+<Tip>
+Regularly update order statuses to keep customers informed about their delivery progress.
+</Tip>
+
+---
+
+## Generating Sales Reports
+
+### PDF Report Export
+
+Export filtered order data as a formatted PDF report.
+
+<Steps>
+  <Step title="Apply Filters (Optional)">
+    Use the date range filter to narrow down orders for the report.
+  </Step>
+  
+  <Step title="Click Download PDF">
+    Click the **"Descargar PDF"** button (red button with PDF icon).
+  </Step>
+  
+  <Step title="Wait for Generation">
+    The system generates the report (may take a few seconds for large datasets).
+  </Step>
+  
+  <Step title="Download File">
+    The PDF automatically downloads as `reporte-ventas.pdf`.
+  </Step>
+</Steps>
+
+**PDF Report Contents:**
+- Report header with generation date
+- Summary metrics (total sales, order count, average ticket)
+- Detailed order table with all filtered orders
+- Footer with page numbers
+
+<Tip>
+Generate reports at the end of each month for accounting and performance analysis.
+</Tip>
+
+---
+
+## Product Management
+
+Manage your entire product catalog from the **Inventario** section.
+
+### Viewing Products
+
+The inventory table displays:
+- **Product image** (thumbnail)
+- **Product name**
+- **Price** (USD)
+- **Stock quantity**
+- **Action buttons** (Edit, Delete)
+
+### Searching and Filtering Products
+
+<Accordion title="Search by Name">
+  1. Type in the **"Buscar por nombre"** search box
+  2. Results filter in real-time as you type
+  3. Clear the search to show all products
+</Accordion>
+
+<Accordion title="Filter by Category">
+  1. Use the **category dropdown** to select a specific category
+  2. Only products in that category display
+  3. Click **"Limpiar"** to reset filters
+</Accordion>
+
+### Creating a New Product
+
+<Steps>
+  <Step title="Open Product Form">
+    Click **"Nuevo Producto"** (green button, top right).
+  </Step>
+  
+  <Step title="Fill Basic Information">
+    **Required fields:**
+    - **Nombre**: Product name
+    - **Precio**: Price in USD (decimal format)
+    - **Stock**: Available quantity
+    - **Categoría**: Select from dropdown
+    
+    **Optional fields:**
+    - **Descripción**: Detailed product description
+  </Step>
+  
+  <Step title="Add Product Images">
+    **Main Image (Portada):**
+    - Enter the URL of the primary product image
+    - This image displays in the catalog grid
+    
+    **Gallery Images:**
+    - Click **"Añadir otra foto a la galería"** to add additional images
+    - Enter URLs for each gallery image
+    - These appear in the product detail carousel
+  </Step>
+  
+  <Step title="Save Product">
+    Click **"Guardar Cambios del Producto"** at the bottom.
+  </Step>
+  
+  <Step title="Confirm Creation">
+    You'll see a success notification and the product appears in the inventory table.
+  </Step>
+</Steps>
+
+<Note>
+Image URLs should be publicly accessible. Consider using a CDN or image hosting service for best performance.
+</Note>
+
+### Editing an Existing Product
+
+<Steps>
+  <Step title="Locate Product">
+    Find the product in the inventory table (use search/filter if needed).
+  </Step>
+  
+  <Step title="Open Edit Form">
+    Click the **"Editar"** button for that product.
+  </Step>
+  
+  <Step title="Modify Information">
+    Update any fields:
+    - Product name, description
+    - Price or stock quantity
+    - Category
+    - Main image URL
+    - Gallery images (add, remove, or modify URLs)
+  </Step>
+  
+  <Step title="Save Changes">
+    Click **"Guardar Cambios del Producto"**.
+  </Step>
+  
+  <Step title="Verify Update">
+    Changes reflect immediately in the inventory table and storefront.
+  </Step>
+</Steps>
+
+### Managing Product Image Galleries
+
+<Accordion title="Adding Gallery Images">
+  1. In the product form, locate the **"Galería de Imágenes"** section
+  2. Click **"Añadir otra foto a la galería"**
+  3. A new URL input field appears
+  4. Enter the image URL
+  5. Repeat to add multiple images
+  6. Save the product
+</Accordion>
+
+<Accordion title="Removing Gallery Images">
+  1. Open the product edit form
+  2. Find the gallery image input you want to remove
+  3. Clear the URL from that input field
+  4. Save the product
+</Accordion>
+
+<Accordion title="Reordering Gallery Images">
+  Gallery images display in the order they appear in the form (top to bottom).
+  
+  To change order:
+  1. Note the current URLs
+  2. Rearrange the URLs in your desired order
+  3. Save the product
+</Accordion>
+
+<Tip>
+Use high-quality images (at least 800x800px) for the best customer experience. Multiple gallery images help customers make informed purchase decisions.
+</Tip>
+
+### Deleting a Product
+
+<Steps>
+  <Step title="Find Product">
+    Locate the product you want to remove.
+  </Step>
+  
+  <Step title="Click Delete">
+    Click the **"Eliminar"** button (red/trash icon).
+  </Step>
+  
+  <Step title="Confirm Deletion">
+    Confirm the action in the popup dialog.
+  </Step>
+  
+  <Step title="Soft Delete">
+    The product is marked as inactive (soft delete) and removed from the storefront.
+  </Step>
+</Steps>
+
+<Note>
+Products are soft-deleted by default, meaning they're hidden from customers but remain in the database. This preserves order history integrity.
+</Note>
+
+---
+
+## Category Management
+
+Organize products into logical categories for easier browsing.
+
+### Viewing Categories
+
+The **Categorías** section displays all product categories:
+- **ID**: Category identifier
+- **Nombre**: Category name
+- **Acciones**: Edit and Delete buttons
+
+### Creating a New Category
+
+<Steps>
+  <Step title="Open Category Form">
+    Click **"Nueva Categoría"** (yellow button, top right).
+  </Step>
+  
+  <Step title="Enter Category Name">
+    Type the category name (e.g., "Laptops", "Smartphones", "Accessories").
+  </Step>
+  
+  <Step title="Save Category">
+    Click **"Guardar Categoría"**.
+  </Step>
+  
+  <Step title="Verify Creation">
+    The new category appears in the table and becomes available in product forms.
+  </Step>
+</Steps>
+
+### Editing a Category
+
+<Steps>
+  <Step title="Find Category">
+    Locate the category in the table.
+  </Step>
+  
+  <Step title="Open Edit Form">
+    Click the **"Editar"** button.
+  </Step>
+  
+  <Step title="Update Name">
+    Modify the category name as needed.
+  </Step>
+  
+  <Step title="Save Changes">
+    Click **"Guardar Categoría"**.
+  </Step>
+</Steps>
+
+<Note>
+Changing a category name updates it for all associated products automatically.
+</Note>
+
+### Deleting a Category
+
+<Steps>
+  <Step title="Select Category">
+    Find the category you want to remove.
+  </Step>
+  
+  <Step title="Click Delete">
+    Click the **"Eliminar"** button.
+  </Step>
+  
+  <Step title="Confirm Deletion">
+    Confirm the action.
+  </Step>
+</Steps>
+
+<Note type="warning">
+Before deleting a category, ensure no products are assigned to it, or reassign those products to a different category.
+</Note>
+
+---
+
+## User Management
+
+Administer customer accounts and permissions.
+
+### Viewing Users
+
+The **Usuarios** section displays all registered users:
+- **ID**: User identifier
+- **Nombre**: Full name
+- **Email**: Email address (login credential)
+- **Rol**: User role (ROLE_ADMIN or ROLE_USER)
+- **Acciones**: Edit and Delete buttons
+
+### Searching Users
+
+<Steps>
+  <Step title="Use Search Bar">
+    Type in the **"Buscar por nombre o email"** field.
+  </Step>
+  
+  <Step title="View Results">
+    Users filter in real-time based on your search.
+  </Step>
+  
+  <Step title="Clear Search">
+    Clear the search field to show all users.
+  </Step>
+</Steps>
+
+### Editing User Information
+
+<Steps>
+  <Step title="Find User">
+    Locate the user in the table (use search if needed).
+  </Step>
+  
+  <Step title="Open Edit Modal">
+    Click the **"Editar"** button.
+  </Step>
+  
+  <Step title="Update Information">
+    Modify:
+    - **Nombre Completo**: User's full name
+    - **Email**: Email address
+    - **Rol**: ADMIN (value: 1) or USER (value: 2)
+  </Step>
+  
+  <Step title="Save Changes">
+    Click **"Actualizar Datos"**.
+  </Step>
+</Steps>
+
+<Note type="important">
+Changing a user's role to ADMIN grants them full access to the admin panel. Use this permission carefully.
+</Note>
+
+### User Roles Explained
+
+<CardGroup cols={2}>
+  <Card title="ROLE_USER" icon="user">
+    **Standard customer access:**
+    - Browse and purchase products
+    - View order history
+    - Manage own profile
+  </Card>
+  
+  <Card title="ROLE_ADMIN" icon="shield">
+    **Administrative access:**
+    - All user permissions
+    - Access admin panel
+    - Manage products and categories
+    - Process orders
+    - View analytics
+    - Manage users
+  </Card>
+</CardGroup>
+
+### Deleting a User
+
+<Steps>
+  <Step title="Select User">
+    Find the user account to remove.
+  </Step>
+  
+  <Step title="Click Delete">
+    Click the **"Eliminar"** button.
+  </Step>
+  
+  <Step title="Confirm Deletion">
+    Confirm the permanent deletion.
+  </Step>
+  
+  <Step title="Account Removed">
+    The user account and associated data are deleted from the system.
+  </Step>
+</Steps>
+
+<Note type="warning">
+Deleting a user is permanent and cannot be undone. The user's order history may be affected.
+</Note>
+
+---
+
+## Best Practices
+
+### Inventory Management
+
+<CardGroup cols={2}>
+  <Card title="Monitor Stock Levels" icon="chart-line">
+    Regularly check the "Stock Crítico" metric and restock low-inventory items promptly.
+  </Card>
+  
+  <Card title="Update Product Information" icon="edit">
+    Keep product descriptions, prices, and images current to maintain customer trust.
+  </Card>
+  
+  <Card title="Use Quality Images" icon="image">
+    Upload high-resolution images with multiple angles to showcase products effectively.
+  </Card>
+  
+  <Card title="Organize with Categories" icon="folder">
+    Create clear, logical categories to help customers find products easily.
+  </Card>
+</CardGroup>
+
+### Order Processing
+
+<Accordion title="Process Orders Promptly">
+  - Check the admin dashboard daily for new orders
+  - Move orders from PENDIENTE to PROCESANDO within 24 hours
+  - Update to ENVIADO when items ship
+  - Mark as ENTREGADO upon confirmation of delivery
+</Accordion>
+
+<Accordion title="Communicate Order Changes">
+  When updating order statuses, consider:
+  - Informing customers of shipping delays
+  - Providing tracking information when available
+  - Following up on delivered orders for satisfaction
+</Accordion>
+
+### Data Analysis
+
+<Accordion title="Regular Reporting">
+  - Generate monthly PDF reports for accounting
+  - Review sales by category to identify trends
+  - Analyze average ticket size to optimize pricing
+  - Monitor order status distribution to identify bottlenecks
+</Accordion>
+
+<Accordion title="Use Filters Effectively">
+  - Filter orders by date range for period analysis
+  - Compare metrics across different time periods
+  - Identify seasonal trends and plan inventory accordingly
+</Accordion>
+
+---
+
+## Admin Panel Navigation Tips
+
+<Steps>
+  <Step title="Use Top Navigation">
+    Quickly switch between sections using the navbar:
+    - **Pedidos**: Dashboard and order management
+    - **Inventario**: Product catalog
+    - **Categorías**: Category organization
+    - **Usuarios**: User administration
+  </Step>
+  
+  <Step title="Return to Storefront">
+    Click **"Ver Tienda"** in the top right to view the customer-facing site.
+  </Step>
+  
+  <Step title="Leverage Search and Filters">
+    Use search boxes and filters in each section to quickly find specific items.
+  </Step>
+  
+  <Step title="Modal Forms">
+    Most create/edit operations open in modal dialogs - you can cancel anytime by clicking the X or clicking outside the modal.
+  </Step>
+</Steps>
+
+---
+
+## Troubleshooting
+
+<Accordion title="Can't access admin panel">
+  **Solution:**
+  - Verify you're logged in with an admin account (ROLE_ADMIN)
+  - Check that your account is active and verified
+  - Clear browser cache and cookies
+  - Try logging out and back in
+</Accordion>
+
+<Accordion title="Charts not displaying">
+  **Solution:**
+  - Ensure there's order data available
+  - Try clicking "Ver Gráficos" to expand the panel
+  - Check browser console for JavaScript errors
+  - Refresh the page
+</Accordion>
+
+<Accordion title="Product images not showing">
+  **Solution:**
+  - Verify image URLs are publicly accessible
+  - Check that URLs use HTTPS protocol
+  - Ensure images exist at the specified URLs
+  - Test URLs directly in a browser
+</Accordion>
+
+<Accordion title="PDF report fails to generate">
+  **Solution:**
+  - Reduce the date range filter if too many orders
+  - Check browser's pop-up blocker settings
+  - Ensure sufficient disk space for download
+  - Try a different browser
+</Accordion>
+
+<Accordion title="Can't update order status">
+  **Solution:**
+  - Verify you have admin permissions
+  - Check internet connection
+  - Ensure the order exists and is valid
+  - Refresh the page and try again
+</Accordion>
+
+<Accordion title="User search not working">
+  **Solution:**
+  - Clear the search field and try again
+  - Check spelling of search terms
+  - Verify users exist in the system
+  - Refresh the page
+</Accordion>
+
+---
+
+## Security Reminders
+
+<Note type="warning">
+**Important Security Practices:**
+
+- **Protect Admin Credentials**: Never share your admin login information
+- **Regular Password Updates**: Change your admin password periodically
+- **Role Management**: Only grant ADMIN role to trusted personnel
+- **Data Privacy**: Handle customer information according to privacy regulations
+- **Audit Regularly**: Monitor admin actions and user changes
+- **Secure Access**: Log out when finished and don't leave sessions open on shared computers
+</Note>
+
+---
+
+## Need Help?
+
+If you encounter issues not covered in this guide:
+
+- **Technical Support**: Contact your system administrator
+- **Feature Requests**: Submit suggestions for platform improvements
+- **Bug Reports**: Document and report any unexpected behavior
+- **Training**: Request additional training for admin staff
+
+<Tip>
+Keep this guide bookmarked for quick reference while managing your TechStore platform.
+</Tip>

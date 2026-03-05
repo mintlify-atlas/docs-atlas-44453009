@@ -1,0 +1,433 @@
+---
+title: "Cart API"
+description: "Complete API reference for shopping cart management"
+---
+
+## Overview
+
+The Cart API provides endpoints for managing user shopping carts, including adding/removing items, viewing cart contents, and converting carts to orders during checkout.
+
+**Base URL**: `/api/carrito`
+
+**Source**: `CarritoController.java`
+
+## Authentication
+
+<Note>
+All cart endpoints require user authentication. Each user has their own persistent cart identified by `usuarioId`.
+</Note>
+
+---
+
+## Endpoints
+
+### Get User Cart
+
+```http
+GET /api/carrito/{usuarioId}
+```
+
+Retrieve the user's shopping cart. If the cart doesn't exist, it will be automatically created.
+
+**Authentication**: Required
+
+<ParamField path="usuarioId" type="long" required>
+  User ID
+</ParamField>
+
+**Response**: `200 OK`
+
+<ResponseField name="id" type="long">
+  Cart ID
+</ResponseField>
+
+<ResponseField name="usuario" type="object">
+  User object with id, nombre, email
+</ResponseField>
+
+<ResponseField name="items" type="array">
+  Array of cart item objects
+  <Expandable title="Cart Item Object">
+    <ResponseField name="id" type="long">Cart item ID</ResponseField>
+    <ResponseField name="producto" type="object">Product object with details</ResponseField>
+    <ResponseField name="cantidad" type="integer">Quantity</ResponseField>
+    <ResponseField name="subtotal" type="double">Item subtotal (precio * cantidad)</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="total" type="double">
+  Cart total (sum of all item subtotals)
+</ResponseField>
+
+**Example Request**:
+
+```bash cURL
+curl -X GET http://localhost:8080/api/carrito/5 \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+**Example Response**:
+
+```json
+{
+  "id": 12,
+  "usuario": {
+    "id": 5,
+    "nombre": "Juan",
+    "email": "juan.perez@example.com"
+  },
+  "items": [
+    {
+      "id": 45,
+      "producto": {
+        "id": 1,
+        "nombre": "Laptop Dell XPS 15",
+        "precio": 1299.99,
+        "imagenes": [...]
+      },
+      "cantidad": 2,
+      "subtotal": 2599.98
+    }
+  ],
+  "total": 2599.98
+}
+```
+
+---
+
+### Add Product to Cart
+
+```http
+POST /api/carrito/{usuarioId}/agregar?productoId={productId}&cantidad={quantity}
+```
+
+Add a product to the user's cart. If the product already exists in the cart, the quantity is incremented.
+
+**Authentication**: Required
+
+<ParamField path="usuarioId" type="long" required>
+  User ID
+</ParamField>
+
+<ParamField query="productoId" type="long" required>
+  Product ID to add
+</ParamField>
+
+<ParamField query="cantidad" type="integer" required>
+  Quantity to add
+</ParamField>
+
+**Response**: `200 OK` - Updated cart object
+
+**Example Request**:
+
+```bash cURL
+curl -X POST "http://localhost:8080/api/carrito/5/agregar?productoId=1&cantidad=2" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+<Tip>
+If the product is already in the cart, the new quantity is **added** to the existing quantity. For example, if the cart has 2 units and you add 3 more, the total becomes 5 units.
+</Tip>
+
+---
+
+### Remove Product from Cart
+
+```http
+DELETE /api/carrito/{usuarioId}/eliminar/{productoId}
+```
+
+Remove a specific product from the cart.
+
+**Authentication**: Required
+
+<ParamField path="usuarioId" type="long" required>
+  User ID
+</ParamField>
+
+<ParamField path="productoId" type="long" required>
+  Product ID to remove
+</ParamField>
+
+**Response**: `200 OK` - Updated cart object (without the removed item)
+
+**Example Request**:
+
+```bash cURL
+curl -X DELETE http://localhost:8080/api/carrito/5/eliminar/1 \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+---
+
+### Clear Cart
+
+```http
+DELETE /api/carrito/{usuarioId}/limpiar
+```
+
+Remove all items from the cart.
+
+**Authentication**: Required
+
+<ParamField path="usuarioId" type="long" required>
+  User ID
+</ParamField>
+
+**Response**: `200 OK` - Empty response
+
+**Example Request**:
+
+```bash cURL
+curl -X DELETE http://localhost:8080/api/carrito/5/limpiar \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+---
+
+### Checkout (Convert Cart to Order)
+
+```http
+POST /api/carrito/{usuarioId}/checkout
+```
+
+Convert the user's cart into an order. This is the core checkout operation.
+
+**Authentication**: Required
+
+<ParamField path="usuarioId" type="long" required>
+  User ID
+</ParamField>
+
+**Response**: `200 OK` - Created order object (see [Orders API](/api/orders-api) for structure)
+
+**What Happens During Checkout**:
+
+<Steps>
+  <Step title="Stock Validation">
+    The system validates that sufficient stock exists for each product in the cart.
+  </Step>
+  
+  <Step title="Order Creation">
+    A new order is created with state `PENDIENTE`, containing all cart items.
+  </Step>
+  
+  <Step title="Stock Deduction">
+    Product stock quantities are automatically deducted.
+  </Step>
+  
+  <Step title="Cart Cleared">
+    The cart is emptied after successful order creation.
+  </Step>
+  
+  <Step title="Email Notification">
+    Order confirmation email is sent to the user.
+  </Step>
+</Steps>
+
+**Example Request**:
+
+```bash cURL
+curl -X POST http://localhost:8080/api/carrito/5/checkout \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+**Success Response** (`200 OK`):
+
+```json
+{
+  "id": 42,
+  "usuario": {...},
+  "total": 2599.98,
+  "estado": "PENDIENTE",
+  "fechaPedido": "2024-01-15T14:30:00",
+  "detalles": [...]
+}
+```
+
+**Error Response** (`400 Bad Request`):
+
+```json
+"Stock insuficiente para el producto: Laptop Dell XPS 15"
+```
+
+<Warning>
+Checkout will fail with a `400` error if any product in the cart has insufficient stock. The entire transaction is rolled back - no partial orders are created.
+</Warning>
+
+---
+
+## Cart Workflow
+
+<Steps>
+  <Step title="Browse Products">
+    User views products using the [Products API](/api/products-api).
+  </Step>
+  
+  <Step title="Add to Cart">
+    User adds desired products to their cart via `POST /api/carrito/{userId}/agregar`.
+  </Step>
+  
+  <Step title="Review Cart">
+    User views cart contents via `GET /api/carrito/{userId}` to see total and items.
+  </Step>
+  
+  <Step title="Adjust Quantities">
+    User can add more of the same product (increments quantity) or remove items entirely.
+  </Step>
+  
+  <Step title="Checkout">
+    User proceeds to checkout via `POST /api/carrito/{userId}/checkout`, which creates an order.
+  </Step>
+  
+  <Step title="Order Placed">
+    Cart is emptied, order is created with status `PENDIENTE`, and confirmation email is sent.
+  </Step>
+</Steps>
+
+---
+
+## Integration Examples
+
+### Frontend: Add Product to Cart
+
+```javascript JavaScript
+async function addToCart(userId, productId, quantity, token) {
+  const response = await fetch(
+    `http://localhost:8080/api/carrito/${userId}/agregar?productoId=${productId}&cantidad=${quantity}`,
+    {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` }
+    }
+  );
+  
+  const cart = await response.json();
+  console.log('Cart updated:', cart);
+  return cart;
+}
+
+// Usage: Add 2 units of product #1 to user #5's cart
+await addToCart(5, 1, 2, userToken);
+```
+
+### Frontend: Display Cart Summary
+
+```javascript JavaScript
+async function displayCart(userId, token) {
+  const response = await fetch(`http://localhost:8080/api/carrito/${userId}`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  
+  const cart = await response.json();
+  
+  console.log(`Cart Total: $${cart.total}`);
+  cart.items.forEach(item => {
+    console.log(`- ${item.producto.nombre} x${item.cantidad} = $${item.subtotal}`);
+  });
+}
+```
+
+### Frontend: Checkout Process
+
+```javascript JavaScript
+async function checkout(userId, token) {
+  try {
+    const response = await fetch(`http://localhost:8080/api/carrito/${userId}/checkout`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    if (response.ok) {
+      const order = await response.json();
+      console.log('Order placed successfully!', order.id);
+      // Redirect to order confirmation page
+      window.location.href = `/orders/${order.id}`;
+    } else {
+      const error = await response.text();
+      console.error('Checkout failed:', error);
+      alert(`Error: ${error}`);
+    }
+  } catch (error) {
+    console.error('Checkout error:', error);
+  }
+}
+```
+
+---
+
+## Cart Data Model
+
+The cart consists of a `Carrito` entity and multiple `CarritoItem` entities:
+
+**Carrito**:
+```json
+{
+  "id": 12,
+  "usuario": { "id": 5, "nombre": "Juan" },
+  "items": [...],
+  "total": 2599.98
+}
+```
+
+**CarritoItem**:
+```json
+{
+  "id": 45,
+  "producto": {
+    "id": 1,
+    "nombre": "Laptop Dell XPS 15",
+    "precio": 1299.99
+  },
+  "cantidad": 2,
+  "subtotal": 2599.98
+}
+```
+
+---
+
+## Error Handling
+
+| Status Code | Scenario | Solution |
+|-------------|----------|----------|
+| `400 Bad Request` | Insufficient stock during checkout | Reduce quantity or wait for restock |
+| `400 Bad Request` | Product not found | Verify product ID exists |
+| `401 Unauthorized` | Missing/invalid token | Re-authenticate user |
+| `403 Forbidden` | Accessing another user's cart | Ensure userId matches authenticated user |
+| `404 Not Found` | User does not exist | Verify user ID |
+
+---
+
+## Best Practices
+
+<Accordion title="Validate Stock Before Checkout">
+  Display a warning to users if product stock is low before they attempt checkout. Check product stock via the Products API.
+</Accordion>
+
+<Accordion title="Persist Cart Across Sessions">
+  The cart is persistent and tied to the user account. Users can add items, log out, and return later to find their cart intact.
+</Accordion>
+
+<Accordion title="Calculate Total on Backend">
+  The cart `total` is calculated server-side to prevent price tampering. Never trust client-side calculations for payment amounts.
+</Accordion>
+
+<Accordion title="Handle Concurrent Checkouts">
+  Use database transactions to ensure stock deduction is atomic. If two users checkout the last item simultaneously, one will fail gracefully.
+</Accordion>
+
+---
+
+## Related Endpoints
+
+<CardGroup cols={2}>
+  <Card title="Products API" icon="box" href="/api/products-api">
+    Browse and search products to add to cart
+  </Card>
+  <Card title="Orders API" icon="receipt" href="/api/orders-api">
+    View orders created from cart checkout
+  </Card>
+  <Card title="Cart Feature Guide" icon="shopping-cart" href="/features/cart">
+    Learn about cart functionality
+  </Card>
+</CardGroup>

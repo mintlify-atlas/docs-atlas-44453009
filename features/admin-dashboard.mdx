@@ -1,0 +1,597 @@
+---
+title: "Admin Dashboard"
+description: "Sales analytics, metrics tracking, and PDF report generation"
+---
+
+## Overview
+
+The TechStore admin dashboard provides comprehensive tools for managing the store, tracking sales performance, and generating detailed reports. Administrators have full access to order management, user administration, and analytics.
+
+<Warning>
+All admin dashboard features require `ROLE_ADMIN` authentication. Ensure users are assigned the correct role.
+</Warning>
+
+## Admin Access Control
+
+The security configuration restricts sensitive operations to administrators:
+
+```java
+.authorizeHttpRequests(auth -> auth
+    // Admin-only routes
+    .requestMatchers("/api/usuarios/**").hasAuthority("ROLE_ADMIN")
+    .requestMatchers(HttpMethod.GET, "/api/pedidos").hasAuthority("ROLE_ADMIN")
+    .requestMatchers(HttpMethod.PUT, "/api/pedidos/**").hasAuthority("ROLE_ADMIN")
+    .requestMatchers(HttpMethod.DELETE, "/api/pedidos/**").hasAuthority("ROLE_ADMIN")
+    .requestMatchers(HttpMethod.POST, "/api/productos/**").hasAuthority("ROLE_ADMIN")
+    .requestMatchers(HttpMethod.PUT, "/api/productos/**").hasAuthority("ROLE_ADMIN")
+    .requestMatchers(HttpMethod.DELETE, "/api/productos/**").hasAuthority("ROLE_ADMIN")
+    .anyRequest().authenticated()
+)
+```
+
+## Sales Management
+
+### View All Orders
+
+```http
+GET /api/pedidos
+Authorization: Bearer {admin-token}
+```
+
+Returns all orders across all customers:
+
+```java
+@GetMapping
+public List<Pedido> listarTodos() {
+    return pedidoService.obtenerTodosLosPedidos();
+}
+```
+
+**Response Example**:
+
+```json
+[
+  {
+    "id": 42,
+    "usuario": {
+      "id": 5,
+      "nombre": "John Doe",
+      "email": "john@example.com"
+    },
+    "fechaPedido": "2026-03-05T10:30:00",
+    "estado": "PENDIENTE",
+    "total": 1599.99,
+    "detalles": [
+      {
+        "producto": { "nombre": "MacBook Pro" },
+        "cantidad": 1,
+        "precioUnitario": 1599.99
+      }
+    ]
+  },
+  ...
+]
+```
+
+### Update Order Status
+
+Admins can manage order fulfillment by updating statuses:
+
+```http
+PUT /api/pedidos/{id}/estado?nuevoEstado={status}
+Authorization: Bearer {admin-token}
+```
+
+**Available Statuses**:
+- `PENDIENTE` - Awaiting processing
+- `PAGADO` - Payment confirmed
+- `ENVIADO` - Shipped to customer
+- `ENTREGADO` - Successfully delivered
+- `CANCELADO` - Order cancelled (auto-restores stock)
+
+**Example**: `PUT /api/pedidos/42/estado?nuevoEstado=ENVIADO`
+
+```java
+@PutMapping("/{id}/estado")
+public ResponseEntity<Pedido> actualizarEstado(
+    @PathVariable Long id,
+    @RequestParam String nuevoEstado
+) {
+    Pedido pedidoActualizado = pedidoService.actualizarEstado(id, nuevoEstado);
+    return ResponseEntity.ok(pedidoActualizado);
+}
+```
+
+<Note>
+Changing status to `CANCELADO` automatically returns products to inventory.
+</Note>
+
+### Delete Orders
+
+```http
+DELETE /api/pedidos/{id}
+Authorization: Bearer {admin-token}
+```
+
+Permanently removes an order from the system:
+
+```java
+@DeleteMapping("/{id}")
+public ResponseEntity<?> eliminar(@PathVariable Long id) {
+    try {
+        pedidoService.eliminarPedido(id);
+        return ResponseEntity.ok().body("Pedido eliminado correctamente");
+    } catch (Exception e) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+            .body("Error al eliminar el pedido");
+    }
+}
+```
+
+<Warning>
+Deleting an order does NOT restore stock. Cancel the order first if inventory adjustment is needed.
+</Warning>
+
+## Sales Analytics
+
+### Key Metrics Dashboard
+
+Build your dashboard frontend by querying the orders API and calculating:
+
+<CardGroup cols={2}>
+  <Card title="Total Revenue" icon="dollar-sign">
+    Sum of `total` field across all completed orders
+  </Card>
+  
+  <Card title="Order Count" icon="cart-shopping">
+    Total number of orders in the system
+  </Card>
+  
+  <Card title="Average Order Value" icon="chart-line">
+    Total revenue divided by number of orders
+  </Card>
+  
+  <Card title="Orders by Status" icon="list-check">
+    Count of orders grouped by status field
+  </Card>
+</CardGroup>
+
+### Example Analytics Calculations
+
+```javascript
+// Fetch all orders
+const orders = await fetch('/api/pedidos', {
+  headers: { 'Authorization': `Bearer ${adminToken}` }
+}).then(res => res.json());
+
+// Total Revenue
+const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0);
+
+// Average Order Value
+const avgOrderValue = totalRevenue / orders.length;
+
+// Orders by Status
+const statusCounts = orders.reduce((acc, order) => {
+  acc[order.estado] = (acc[order.estado] || 0) + 1;
+  return acc;
+}, {});
+
+// Recent Orders (last 30 days)
+const thirtyDaysAgo = new Date();
+thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+const recentOrders = orders.filter(order => 
+  new Date(order.fechaPedido) >= thirtyDaysAgo
+);
+
+// Top Products (requires aggregating order details)
+const productSales = {};
+orders.forEach(order => {
+  order.detalles.forEach(detalle => {
+    const prodName = detalle.producto.nombre;
+    productSales[prodName] = (productSales[prodName] || 0) + detalle.cantidad;
+  });
+});
+```
+
+## PDF Sales Reports
+
+Generate comprehensive sales reports in PDF format:
+
+```http
+POST /api/pedidos/reporte/pdf
+Authorization: Bearer {admin-token}
+Content-Type: application/json
+```
+
+**Request Body** (send filtered orders):
+
+```json
+[
+  {
+    "id": 1,
+    "fechaPedido": "2026-03-01T10:30:00",
+    "usuario": {
+      "nombre": "John",
+      "apellido": "Doe",
+      "email": "john@example.com"
+    },
+    "estado": "ENTREGADO",
+    "total": 1599.99
+  },
+  {
+    "id": 2,
+    "fechaPedido": "2026-03-02T14:15:00",
+    "usuario": {
+      "nombre": "Jane",
+      "apellido": "Smith",
+      "email": "jane@example.com"
+    },
+    "estado": "ENVIADO",
+    "total": 899.50
+  }
+]
+```
+
+**Implementation**:
+
+```java
+@PostMapping("/reporte/pdf")
+public ResponseEntity<byte[]> descargarReporte(
+    @RequestBody List<Pedido> pedidosFiltrados
+) {
+    byte[] pdf = pedidoReporteService.generarReportePedidos(pedidosFiltrados);
+    
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_PDF);
+    headers.setContentDispositionFormData("attachment", "reporte-ventas.pdf");
+    
+    return new ResponseEntity<>(pdf, headers, HttpStatus.OK);
+}
+```
+
+### Report Contents
+
+The PDF includes:
+
+1. **Header**: "TECHSTORE - REPORTE DE VENTAS"
+2. **Order Table**:
+   - ID
+   - Fecha (Order date)
+   - Cliente (Customer name or email)
+   - Estado (Order status)
+   - Total (Order amount)
+3. **Summary**: Grand total of all orders in the report
+
+### Filtering Reports
+
+<Tabs>
+  <Tab title="Date Range">
+    Filter orders by date before sending to PDF endpoint:
+    
+    ```javascript
+    const startDate = new Date('2026-03-01');
+    const endDate = new Date('2026-03-31');
+    
+    const filteredOrders = orders.filter(order => {
+      const orderDate = new Date(order.fechaPedido);
+      return orderDate >= startDate && orderDate <= endDate;
+    });
+    
+    // Send to PDF endpoint
+    const response = await fetch('/api/pedidos/reporte/pdf', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify(filteredOrders)
+    });
+    
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'sales-report-march-2026.pdf';
+    a.click();
+    ```
+  </Tab>
+  
+  <Tab title="By Status">
+    Generate reports for specific order statuses:
+    
+    ```javascript
+    const completedOrders = orders.filter(order => 
+      order.estado === 'ENTREGADO'
+    );
+    
+    // Generate PDF for completed orders only
+    ```
+  </Tab>
+  
+  <Tab title="By Customer">
+    Create customer-specific reports:
+    
+    ```javascript
+    const customerOrders = orders.filter(order => 
+      order.usuario.id === customerId
+    );
+    
+    // Generate PDF for specific customer
+    ```
+  </Tab>
+  
+  <Tab title="Revenue Threshold">
+    Filter high-value orders:
+    
+    ```javascript
+    const highValueOrders = orders.filter(order => 
+      order.total >= 1000
+    );
+    
+    // Generate PDF for orders over $1000
+    ```
+  </Tab>
+</Tabs>
+
+<Tip>
+Always filter data client-side before sending to the PDF endpoint for maximum flexibility.
+</Tip>
+
+## Product Management
+
+### Create Products
+
+```http
+POST /api/productos
+Authorization: Bearer {admin-token}
+```
+
+Add new products to the catalog:
+
+```json
+{
+  "nombre": "iPhone 15 Pro",
+  "descripcion": "Latest flagship smartphone",
+  "precio": 999.99,
+  "stock": 50,
+  "imagenUrl": "https://example.com/iphone.jpg",
+  "destacado": true,
+  "categoria": { "id": 1 }
+}
+```
+
+### Update Products
+
+```http
+PUT /api/productos/{id}
+Authorization: Bearer {admin-token}
+```
+
+Modify product details, pricing, or stock levels.
+
+### Manage Image Gallery
+
+```http
+PUT /api/productos/{id}/galeria
+Authorization: Bearer {admin-token}
+```
+
+Update product image galleries:
+
+```json
+[
+  "https://example.com/image1.jpg",
+  "https://example.com/image2.jpg",
+  "https://example.com/image3.jpg"
+]
+```
+
+### Delete Products
+
+```http
+DELETE /api/productos/{id}
+Authorization: Bearer {admin-token}
+```
+
+Soft delete (marks as inactive):
+
+```http
+DELETE /api/productos/{id}/definitivo
+```
+
+Permanent deletion.
+
+## User Management
+
+### List All Users
+
+```http
+GET /api/usuarios
+Authorization: Bearer {admin-token}
+```
+
+Returns all registered users:
+
+```java
+@GetMapping
+public ResponseEntity<List<Usuario>> getAllUsers() {
+    return ResponseEntity.ok(usuarioService.findAllUsers());
+}
+```
+
+### Get User Details
+
+```http
+GET /api/usuarios/{id}
+Authorization: Bearer {admin-token}
+```
+
+View complete user profile including order history.
+
+### Delete User Account
+
+```http
+DELETE /api/usuarios/{id}
+Authorization: Bearer {admin-token}
+```
+
+Permanently removes a user account:
+
+```java
+@DeleteMapping("/{id}")
+public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
+    usuarioService.deleteUser(id);
+    return ResponseEntity.noContent().build();
+}
+```
+
+<Warning>
+Deleting users may impact related orders. Consider soft-delete alternatives for user accounts with order history.
+</Warning>
+
+## Dashboard UI Recommendations
+
+<Steps>
+  <Step title="Overview Cards">
+    Display key metrics: Total Revenue, Order Count, Average Order Value, Low Stock Products
+  </Step>
+  
+  <Step title="Recent Orders Table">
+    Show latest 10 orders with quick status update buttons
+  </Step>
+  
+  <Step title="Charts & Graphs">
+    Visualize:
+    - Revenue over time (line chart)
+    - Orders by status (pie chart)
+    - Top selling products (bar chart)
+    - Sales by category (donut chart)
+  </Step>
+  
+  <Step title="Quick Actions">
+    Buttons for:
+    - Add New Product
+    - Generate Report
+    - View All Orders
+    - Manage Users
+  </Step>
+  
+  <Step title="Filters & Search">
+    Date range pickers, status filters, customer search
+  </Step>
+</Steps>
+
+## Admin API Reference
+
+| Resource | Method | Endpoint | Description |
+|----------|--------|----------|-------------|
+| **Orders** | GET | `/api/pedidos` | List all orders |
+| | GET | `/api/pedidos/{id}` | View order details |
+| | PUT | `/api/pedidos/{id}/estado` | Update order status |
+| | DELETE | `/api/pedidos/{id}` | Delete order |
+| | POST | `/api/pedidos/reporte/pdf` | Generate PDF report |
+| **Products** | POST | `/api/productos` | Create product |
+| | PUT | `/api/productos/{id}` | Update product |
+| | PUT | `/api/productos/{id}/galeria` | Update gallery |
+| | DELETE | `/api/productos/{id}` | Soft delete |
+| | DELETE | `/api/productos/{id}/definitivo` | Hard delete |
+| **Users** | GET | `/api/usuarios` | List all users |
+| | GET | `/api/usuarios/{id}` | View user details |
+| | DELETE | `/api/usuarios/{id}` | Delete user |
+
+<Note>
+All admin endpoints require the `Authorization: Bearer {token}` header with a valid admin token.
+</Note>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Role Verification" icon="shield-check">
+    Always verify admin role on both frontend and backend to prevent unauthorized access.
+  </Card>
+  
+  <Card title="Audit Logging" icon="file-lines">
+    Log admin actions (order updates, deletions) for security and compliance.
+  </Card>
+  
+  <Card title="Data Validation" icon="circle-check">
+    Validate all inputs before updating orders or products to maintain data integrity.
+  </Card>
+  
+  <Card title="Report Caching" icon="database">
+    Cache frequently generated reports to improve performance.
+  </Card>
+</CardGroup>
+
+## Security Considerations
+
+<Warning>
+**Critical Security Measures**:
+
+1. **Token Expiration**: Admin tokens should expire after inactivity
+2. **IP Whitelisting**: Consider restricting admin access to specific IPs
+3. **Two-Factor Authentication**: Implement 2FA for admin accounts
+4. **Action Confirmation**: Require confirmation for destructive operations
+5. **Session Management**: Automatically log out inactive admin sessions
+</Warning>
+
+## Example: Building a Sales Summary
+
+```javascript
+class AdminDashboard {
+  constructor(adminToken) {
+    this.token = adminToken;
+    this.baseUrl = '/api';
+  }
+  
+  async fetchOrders() {
+    const response = await fetch(`${this.baseUrl}/pedidos`, {
+      headers: { 'Authorization': `Bearer ${this.token}` }
+    });
+    return response.json();
+  }
+  
+  async getSalesSummary() {
+    const orders = await this.fetchOrders();
+    
+    return {
+      totalOrders: orders.length,
+      totalRevenue: orders.reduce((sum, o) => sum + o.total, 0),
+      averageOrderValue: orders.reduce((sum, o) => sum + o.total, 0) / orders.length,
+      ordersByStatus: orders.reduce((acc, o) => {
+        acc[o.estado] = (acc[o.estado] || 0) + 1;
+        return acc;
+      }, {}),
+      todaysOrders: orders.filter(o => 
+        new Date(o.fechaPedido).toDateString() === new Date().toDateString()
+      ).length,
+      pendingOrders: orders.filter(o => o.estado === 'PENDIENTE').length
+    };
+  }
+  
+  async generateMonthlyReport(year, month) {
+    const orders = await this.fetchOrders();
+    const filtered = orders.filter(order => {
+      const date = new Date(order.fechaPedido);
+      return date.getFullYear() === year && date.getMonth() === month;
+    });
+    
+    const response = await fetch(`${this.baseUrl}/pedidos/reporte/pdf`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.token}`
+      },
+      body: JSON.stringify(filtered)
+    });
+    
+    return response.blob();
+  }
+}
+
+// Usage
+const dashboard = new AdminDashboard(adminToken);
+const summary = await dashboard.getSalesSummary();
+console.log(`Total Revenue: $${summary.totalRevenue.toFixed(2)}`);
+console.log(`Pending Orders: ${summary.pendingOrders}`);
+```

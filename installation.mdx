@@ -1,0 +1,575 @@
+---
+title: 'Installation'
+description: 'Complete installation guide for TechStore backend'
+icon: 'download'
+---
+
+This guide covers everything you need to know to install and configure TechStore in both development and production environments.
+
+## Prerequisites
+
+Before installing TechStore, ensure your system meets the following requirements:
+
+### Required Software
+
+<CardGroup cols={2}>
+  <Card title="Java 21" icon="java">
+    TechStore is built with Java 21 and Spring Boot 3.4.1
+    
+    ```bash
+    java -version
+    # Should show: openjdk version "21.x.x"
+    ```
+  </Card>
+  <Card title="MySQL 8.0+" icon="database">
+    Primary database (PostgreSQL also supported)
+    
+    ```bash
+    mysql --version
+    # Should show: mysql Ver 8.0.x
+    ```
+  </Card>
+  <Card title="Maven 3.6+" icon="box">
+    Build tool (or use included wrapper)
+    
+    ```bash
+    mvn -version
+    # Or use ./mvnw (included)
+    ```
+  </Card>
+  <Card title="Git" icon="git">
+    Version control for cloning the repository
+    
+    ```bash
+    git --version
+    ```
+  </Card>
+</CardGroup>
+
+### System Requirements
+
+- **RAM**: 4GB minimum, 8GB recommended
+- **Disk Space**: 500MB for application + database
+- **OS**: Linux, macOS, or Windows
+
+## Installation Steps
+
+### 1. Install Java 21
+
+<Tabs>
+  <Tab title="Ubuntu/Debian">
+    ```bash
+    sudo apt update
+    sudo apt install openjdk-21-jdk
+    java -version
+    ```
+  </Tab>
+  <Tab title="macOS">
+    ```bash
+    brew install openjdk@21
+    echo 'export PATH="/opt/homebrew/opt/openjdk@21/bin:$PATH"' >> ~/.zshrc
+    source ~/.zshrc
+    java -version
+    ```
+  </Tab>
+  <Tab title="Windows">
+    1. Download [OpenJDK 21](https://adoptium.net/)
+    2. Run the installer
+    3. Set `JAVA_HOME` environment variable
+    4. Add `%JAVA_HOME%\bin` to PATH
+  </Tab>
+</Tabs>
+
+### 2. Install MySQL
+
+<Tabs>
+  <Tab title="Ubuntu/Debian">
+    ```bash
+    sudo apt update
+    sudo apt install mysql-server
+    sudo systemctl start mysql
+    sudo mysql_secure_installation
+    ```
+  </Tab>
+  <Tab title="macOS">
+    ```bash
+    brew install mysql
+    brew services start mysql
+    mysql_secure_installation
+    ```
+  </Tab>
+  <Tab title="Windows">
+    1. Download [MySQL Community Server](https://dev.mysql.com/downloads/mysql/)
+    2. Run the installer and follow the setup wizard
+    3. Choose "Developer Default" installation type
+  </Tab>
+</Tabs>
+
+### 3. Database Setup
+
+#### Create Database
+
+Connect to MySQL and create the database:
+
+```bash
+mysql -u root -p
+```
+
+```sql
+CREATE DATABASE tienda_digital;
+CREATE DATABASE tienda_digital_test; -- Optional: for testing
+
+-- Create dedicated user (recommended for production)
+CREATE USER 'techstore'@'localhost' IDENTIFIED BY 'secure_password_here';
+GRANT ALL PRIVILEGES ON tienda_digital.* TO 'techstore'@'localhost';
+GRANT ALL PRIVILEGES ON tienda_digital_test.* TO 'techstore'@'localhost';
+FLUSH PRIVILEGES;
+
+EXIT;
+```
+
+<Warning>
+  Always use strong passwords in production environments. Never commit database credentials to version control.
+</Warning>
+
+#### Schema Initialization
+
+TechStore uses **Hibernate DDL Auto** mode, which automatically creates and updates database tables based on your entity classes.
+
+<Note>
+  The `spring.jpa.hibernate.ddl-auto=update` setting means:
+  - Tables are created automatically on first run
+  - Schema changes are applied on application restart
+  - Existing data is preserved
+</Note>
+
+**Main tables created:**
+- `usuarios` - User accounts with authentication
+- `roles` - User role definitions (ADMIN, USER)
+- `usuarios_roles` - Many-to-many relationship
+- `productos` - Product catalog
+- `categorias` - Product categories
+- `pedidos` - Customer orders
+- `pedido_detalle` - Order line items
+- `carrito` - Shopping cart sessions
+- `carrito_item` - Cart items
+- `producto_imagen` - Product image gallery
+
+### 4. Application Configuration
+
+#### Basic Configuration
+
+Create or edit `src/main/resources/application.properties`:
+
+```properties
+# Application Name
+spring.application.name=tienda-online
+
+# Database Configuration
+spring.datasource.url=jdbc:mysql://localhost:3306/tienda_digital?serverTimezone=UTC
+spring.datasource.username=techstore
+spring.datasource.password=secure_password_here
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+
+# JPA / Hibernate Settings
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.format_sql=true
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQL8Dialect
+
+# Logging Configuration
+logging.level.org.springframework.security=INFO
+logging.level.org.hibernate.SQL=DEBUG
+logging.level.org.hibernate.type.descriptor.sql.BasicBinder=TRACE
+```
+
+#### Email Service Configuration (Optional but Recommended)
+
+TechStore includes an email service for user verification and password recovery:
+
+```properties
+# Gmail SMTP Configuration
+spring.mail.host=smtp.gmail.com
+spring.mail.port=587
+spring.mail.username=your-email@gmail.com
+spring.mail.password=your-16-char-app-password
+
+# SMTP Properties
+spring.mail.properties.mail.smtp.auth=true
+spring.mail.properties.mail.smtp.starttls.enable=true
+spring.mail.properties.mail.smtp.starttls.required=true
+spring.mail.properties.mail.smtp.ssl.trust=smtp.gmail.com
+
+# Brand Customization
+app.shop.name=TechStore
+app.shop.support-email=support@techstore.com
+
+# Sender Identity
+spring.mail.properties.mail.smtp.from=your-email@gmail.com
+spring.mail.properties.mail.debug=false
+```
+
+<Tip>
+  **Gmail Users**: Generate an App Password at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords). Regular passwords won't work with SMTP.
+</Tip>
+
+#### Security Configuration
+
+TechStore uses **RSA asymmetric encryption** for JWT tokens. Keys are generated automatically on startup, but you can configure:
+
+```properties
+# JWT Configuration (optional - defaults work fine)
+jwt.expiration-hours=24
+
+# CORS Configuration (adjust for your frontend)
+cors.allowed-origins=http://localhost:3000,https://yourdomain.com
+```
+
+The SecurityConfig class (`src/main/java/ab/tienda_online/security/SecurityConfig.java:143-151`) automatically generates 2048-bit RSA keys for secure JWT signing.
+
+### 5. Build the Application
+
+Using Maven Wrapper (recommended):
+
+```bash
+# Unix/macOS
+./mvnw clean install
+
+# Windows
+mvnw.cmd clean install
+```
+
+Using system Maven:
+
+```bash
+mvn clean install
+```
+
+<Note>
+  The first build downloads all dependencies (~200MB). Subsequent builds are much faster.
+</Note>
+
+### 6. Run the Application
+
+#### Development Mode
+
+```bash
+# With Maven Wrapper
+./mvnw spring-boot:run
+
+# With system Maven
+mvn spring-boot:run
+
+# With Java directly (after building)
+java -jar target/tienda-online-0.0.1-SNAPSHOT.jar
+```
+
+The application starts on **http://localhost:8080** by default.
+
+#### Production Mode
+
+For production, build an executable JAR and run with production profile:
+
+```bash
+# Build production JAR
+./mvnw clean package -DskipTests
+
+# Run with production settings
+java -jar -Dspring.profiles.active=prod target/tienda-online-0.0.1-SNAPSHOT.jar
+```
+
+<Warning>
+  Create `application-prod.properties` with production-specific settings (secure passwords, external database, etc.)
+</Warning>
+
+#### Run as System Service (Linux)
+
+Create `/etc/systemd/system/techstore.service`:
+
+```ini
+[Unit]
+Description=TechStore E-Commerce Application
+After=syslog.target network.target mysql.service
+
+[Service]
+User=techstore
+ExecStart=/usr/bin/java -jar /opt/techstore/tienda-online.jar
+SuccessExitStatus=143
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable techstore
+sudo systemctl start techstore
+sudo systemctl status techstore
+```
+
+## Development vs Production
+
+### Development Settings
+
+```properties
+# Show SQL queries for debugging
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.format_sql=true
+
+# Detailed security logs
+logging.level.org.springframework.security=DEBUG
+
+# Auto-update schema
+spring.jpa.hibernate.ddl-auto=update
+
+# Enable DevTools for hot reload
+spring.devtools.restart.enabled=true
+```
+
+### Production Settings
+
+```properties
+# Disable SQL logging
+spring.jpa.show-sql=false
+
+# Minimal logging
+logging.level.org.springframework.security=WARN
+
+# Validate schema only (don't auto-update)
+spring.jpa.hibernate.ddl-auto=validate
+
+# Use connection pooling
+spring.datasource.hikari.maximum-pool-size=10
+spring.datasource.hikari.minimum-idle=5
+
+# Disable DevTools
+spring.devtools.restart.enabled=false
+```
+
+<Warning>
+  Never use `ddl-auto=update` in production! Use database migration tools like Flyway or Liquibase instead.
+</Warning>
+
+## Verify Installation
+
+Check that the application is running correctly:
+
+```bash
+# Health check
+curl http://localhost:8080/api/productos
+
+# Should return 200 OK with product list (may be empty initially)
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Port 8080 already in use">
+    **Error:** `Web server failed to start. Port 8080 was already in use.`
+
+    **Solution:**
+    
+    Change the port in `application.properties`:
+    ```properties
+    server.port=8081
+    ```
+
+    Or kill the process using port 8080:
+    ```bash
+    # Find process
+    lsof -i :8080
+    
+    # Kill it
+    kill -9 <PID>
+    ```
+  </Accordion>
+
+  <Accordion title="Database connection refused">
+    **Error:** `Communications link failure` or `Connection refused`
+
+    **Solution:**
+
+    1. Verify MySQL is running:
+       ```bash
+       sudo systemctl status mysql
+       # or
+       brew services list
+       ```
+
+    2. Check connection details in `application.properties`:
+       ```properties
+       spring.datasource.url=jdbc:mysql://localhost:3306/tienda_digital?serverTimezone=UTC
+       ```
+
+    3. Test connection manually:
+       ```bash
+       mysql -u techstore -p -h localhost tienda_digital
+       ```
+
+    4. Verify user permissions:
+       ```sql
+       SHOW GRANTS FOR 'techstore'@'localhost';
+       ```
+  </Accordion>
+
+  <Accordion title="Java version mismatch">
+    **Error:** `Unsupported class file major version 65`
+
+    **Solution:**
+
+    TechStore requires Java 21. Check your version:
+    ```bash
+    java -version
+    javac -version
+    ```
+
+    If you have multiple Java versions, set `JAVA_HOME`:
+    ```bash
+    export JAVA_HOME=/path/to/java-21
+    export PATH=$JAVA_HOME/bin:$PATH
+    ```
+  </Accordion>
+
+  <Accordion title="JWT token generation fails">
+    **Error:** `IllegalStateException` during RSA key generation
+
+    **Solution:**
+
+    This is rare but can happen if your JVM lacks cryptography libraries. Ensure you're using a full JDK (not JRE):
+    ```bash
+    java -version
+    # Should show "OpenJDK" not just "Java"
+    ```
+
+    The RSA key generation happens in `SecurityConfig.java:143-151`.
+  </Accordion>
+
+  <Accordion title="Email sending fails">
+    **Error:** `Authentication failed` or `Could not send mail`
+
+    **Solutions:**
+
+    1. **Gmail App Password**: Don't use your regular Gmail password. Generate an App Password:
+       - Go to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
+       - Generate a 16-character password
+       - Use this in `application.properties`
+
+    2. **Check SMTP settings**:
+       ```properties
+       spring.mail.host=smtp.gmail.com
+       spring.mail.port=587
+       spring.mail.properties.mail.smtp.starttls.enable=true
+       ```
+
+    3. **Enable debug mode**:
+       ```properties
+       spring.mail.properties.mail.debug=true
+       ```
+
+    4. **Test with curl**:
+       ```bash
+       curl -v --url 'smtps://smtp.gmail.com:465' --ssl-reqd \
+         --mail-from 'your-email@gmail.com' \
+         --user 'your-email@gmail.com:your-app-password'
+       ```
+  </Accordion>
+
+  <Accordion title="Maven build fails">
+    **Error:** `Failed to execute goal` or dependency issues
+
+    **Solutions:**
+
+    1. Clear Maven cache:
+       ```bash
+       rm -rf ~/.m2/repository
+       ./mvnw clean install
+       ```
+
+    2. Use Maven wrapper instead of system Maven:
+       ```bash
+       ./mvnw clean install
+       ```
+
+    3. Check network connectivity (Maven downloads dependencies)
+
+    4. Verify `pom.xml` is not corrupted:
+       ```bash
+       ./mvnw validate
+       ```
+  </Accordion>
+
+  <Accordion title="Hibernate schema update errors">
+    **Error:** `Table doesn't exist` or `Column not found`
+
+    **Solution:**
+
+    1. **Development**: Drop and recreate database:
+       ```sql
+       DROP DATABASE tienda_digital;
+       CREATE DATABASE tienda_digital;
+       ```
+
+    2. **Production**: Use manual migration:
+       ```properties
+       spring.jpa.hibernate.ddl-auto=validate
+       ```
+       Then apply schema changes manually.
+
+    3. Check entity classes match database:
+       - `Usuario.java:43-49` - User roles relationship
+       - `Producto.java:42-44` - Product category relationship
+  </Accordion>
+
+  <Accordion title="CORS errors from frontend">
+    **Error:** `Access to fetch blocked by CORS policy`
+
+    **Solution:**
+
+    Add your frontend URL to CORS configuration in `SecurityConfig.java:66-73`:
+
+    ```java
+    cfg.setAllowedOrigins(List.of(
+        "http://localhost:3000",  // React default
+        "http://localhost:5173",  // Vite default
+        "https://yourdomain.com"  // Production
+    ));
+    ```
+
+    Or in `application.properties`:
+    ```properties
+    cors.allowed-origins=http://localhost:3000,https://yourdomain.com
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart Guide" icon="rocket" href="/quickstart">
+    Make your first API request in 5 minutes
+  </Card>
+  <Card title="Configuration" icon="gear" href="/configuration">
+    Advanced configuration options
+  </Card>
+  <Card title="API Reference" icon="book" href="/api-reference">
+    Explore all available endpoints
+  </Card>
+  <Card title="Deployment" icon="cloud" href="/deployment">
+    Deploy to production (Docker, AWS, etc.)
+  </Card>
+</CardGroup>
+
+## Additional Resources
+
+- [Spring Boot Documentation](https://spring.io/projects/spring-boot)
+- [MySQL Documentation](https://dev.mysql.com/doc/)
+- [JWT Best Practices](https://datatracker.ietf.org/doc/html/rfc8725)
+- [Maven Guide](https://maven.apache.org/guides/)
+
+<Note>
+  Having issues? Check the [GitHub Issues](https://github.com/your-repo/issues) or reach out to the community.
+</Note>

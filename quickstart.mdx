@@ -1,80 +1,267 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: 'Quickstart'
+description: 'Get TechStore up and running in under 5 minutes'
+icon: 'rocket'
 ---
 
-## Get started in three steps
-
-Get your documentation site running locally and make your first customization.
-
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+This guide will walk you through setting up TechStore from scratch to making your first API request. You'll have a fully functional e-commerce backend running locally in minutes.
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  **Prerequisites**: Ensure you have Java 21, MySQL, and Maven installed on your system before starting.
+</Note>
+
+## Getting Started
+
+<Steps>
+  <Step title="Clone and Navigate to the Project">
+    First, clone the repository and navigate to the project directory:
+
+    ```bash
+    git clone <repository-url>
+    cd tienda-online
+    ```
+  </Step>
+
+  <Step title="Set Up the MySQL Database">
+    Create a new MySQL database for TechStore:
+
+    ```bash
+    mysql -u root -p
+    ```
+
+    Then execute the following SQL commands:
+
+    ```sql
+    CREATE DATABASE tienda_digital;
+    USE tienda_digital;
+    ```
+
+    <Tip>
+      The application uses Hibernate's `ddl-auto=update` mode, so tables will be created automatically on first run. No manual schema creation needed!
+    </Tip>
+  </Step>
+
+  <Step title="Configure Application Properties">
+    Open `src/main/resources/application.properties` and configure your database connection:
+
+    ```properties
+    # Database Configuration
+    spring.datasource.url=jdbc:mysql://localhost:3306/tienda_digital?serverTimezone=UTC
+    spring.datasource.username=root
+    spring.datasource.password=your_mysql_password
+    spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+
+    # JPA / Hibernate
+    spring.jpa.hibernate.ddl-auto=update
+    spring.jpa.show-sql=true
+    spring.jpa.properties.hibernate.format_sql=true
+    ```
+
+    <Warning>
+      Replace `your_mysql_password` with your actual MySQL root password.
+    </Warning>
+
+    ### Optional: Configure Email Service
+
+    For user registration with email verification, add your SMTP credentials:
+
+    ```properties
+    # Gmail SMTP Configuration
+    spring.mail.host=smtp.gmail.com
+    spring.mail.port=587
+    spring.mail.username=your-email@gmail.com
+    spring.mail.password=your-app-password
+
+    # SMTP Properties
+    spring.mail.properties.mail.smtp.auth=true
+    spring.mail.properties.mail.smtp.starttls.enable=true
+    spring.mail.properties.mail.smtp.starttls.required=true
+    spring.mail.properties.mail.smtp.ssl.trust=smtp.gmail.com
+
+    # Brand Customization
+    app.shop.name=TechStore
+    app.shop.support-email=support@techstore.com
+    ```
+
+    <Note>
+      For Gmail, you'll need to generate an [App Password](https://support.google.com/accounts/answer/185833) instead of using your regular password.
+    </Note>
+  </Step>
+
+  <Step title="Build and Run the Application">
+    Use the Maven wrapper to build and start the application:
+
+    ```bash
+    ./mvnw clean install
+    ./mvnw spring-boot:run
+    ```
+
+    On Windows, use:
+
+    ```bash
+    mvnw.cmd clean install
+    mvnw.cmd spring-boot:run
+    ```
+
+    The application will start on `http://localhost:8080`. You should see output indicating successful startup:
+
+    ```
+    Started TiendaOnlineApplication in X.XXX seconds
+    ```
+  </Step>
+
+  <Step title="Make Your First API Request">
+    Now that the server is running, let's test it by registering a new user.
+
+    ### Register a New User
+
+    ```bash
+    curl -X POST http://localhost:8080/api/auth/register \
+      -H "Content-Type: application/json" \
+      -d '{
+        "nombre": "John",
+        "apellido": "Doe",
+        "email": "john.doe@example.com",
+        "password": "SecurePass123",
+        "telefono": "555-0100",
+        "direccion": "123 Main St, City"
+      }'
+    ```
+
+    **Response:**
+    ```json
+    {
+      "message": "Usuario registrado. Revisa tu correo para activar la cuenta."
+    }
+    ```
+
+    <Note>
+      If email is configured, the user will receive a verification email. Otherwise, you'll need to manually set `enabled=true` in the database to activate the account.
+    </Note>
+
+    ### Verify Account (Manual Method)
+
+    For testing without email, activate the account directly in MySQL:
+
+    ```sql
+    USE tienda_digital;
+    UPDATE usuarios SET enabled = true WHERE email = 'john.doe@example.com';
+    ```
+
+    ### Login and Get Access Token
+
+    ```bash
+    curl -X POST http://localhost:8080/api/auth/login \
+      -H "Content-Type: application/json" \
+      -d '{
+        "email": "john.doe@example.com",
+        "password": "SecurePass123"
+      }'
+    ```
+
+    **Response:**
+    ```json
+    {
+      "id": "1",
+      "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+      "email": "john.doe@example.com",
+      "nombre": "John",
+      "rol": "ROLE_USER"
+    }
+    ```
+
+    <Tip>
+      Save the `access_token` - you'll need it to access protected endpoints!
+    </Tip>
+  </Step>
+
+  <Step title="Fetch Products">
+    Let's retrieve the product catalog (public endpoint, no auth required):
+
+    ```bash
+    curl http://localhost:8080/api/productos/activos
+    ```
+
+    **Response:**
+    ```json
+    [
+      {
+        "id": 1,
+        "nombre": "Laptop Pro 15",
+        "slug": "laptop-pro-15",
+        "descripcion": "High-performance laptop",
+        "precio": 1299.99,
+        "stock": 50,
+        "imagenUrl": "https://example.com/laptop.jpg",
+        "activo": true,
+        "destacado": true,
+        "categoria": {
+          "id": 1,
+          "nombre": "Electronics"
+        }
+      }
+    ]
+    ```
+
+    ### Get Featured Products
+
+    ```bash
+    curl http://localhost:8080/api/productos/destacados
+    ```
+
+    ### Search Products by Name
+
+    ```bash
+    curl "http://localhost:8080/api/productos/buscar?nombre=laptop"
+    ```
+  </Step>
+</Steps>
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="API Reference" icon="book" href="/api-reference">
+    Explore all available endpoints and their parameters
+  </Card>
+  <Card title="Authentication" icon="lock" href="/security/authentication">
+    Learn about JWT tokens and RSA encryption
+  </Card>
+  <Card title="Database Schema" icon="database" href="/database/schema">
+    Understand the data models and relationships
+  </Card>
+  <Card title="Configuration" icon="gear" href="/configuration">
+    Advanced configuration options and environment variables
+  </Card>
+</CardGroup>
+
+## Quick Reference
+
+### Base URL
+```
+http://localhost:8080
+```
+
+### Key Endpoints
+
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---------------|
+| POST | `/api/auth/register` | Register new user | No |
+| POST | `/api/auth/login` | Login and get JWT | No |
+| GET | `/api/productos` | List all products | No |
+| GET | `/api/productos/activos` | List active products | No |
+| GET | `/api/productos/{id}` | Get product details | No |
+| GET | `/api/categorias` | List all categories | No |
+| POST | `/api/pedidos` | Create new order | Yes |
+
+### Using JWT Authentication
+
+For protected endpoints, include the JWT token in the Authorization header:
+
+```bash
+curl http://localhost:8080/api/pedidos/usuario/1 \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+<Note>
+  Need help? Check the [troubleshooting section](/installation#troubleshooting) in the installation guide.
 </Note>

@@ -1,0 +1,472 @@
+---
+title: "Product Management"
+description: "Product catalog with image galleries, categories, search, and stock management"
+---
+
+## Overview
+
+TechStore's product management system supports comprehensive e-commerce features including multi-image galleries, category organization, search functionality, stock tracking, and featured product highlights.
+
+<Note>
+Products use automatic slug generation for SEO-friendly URLs based on product names.
+</Note>
+
+## Product Model
+
+The `Producto` entity includes:
+
+```java
+@Entity
+@Table(name = "productos")
+public class Producto {
+    private Long id;
+    private String nombre;
+    private String slug;              // Auto-generated SEO URL
+    private String descripcion;       // TEXT column for long descriptions
+    private BigDecimal precio;
+    private Integer stock;
+    private String imagenUrl;         // Primary product image
+    private Boolean activo = true;    // Soft delete flag
+    private Boolean destacado = false; // Featured product flag
+    private LocalDateTime fechaCreacion;
+    
+    @ManyToOne(fetch = FetchType.EAGER)
+    private Categoria categoria;
+    
+    @OneToMany(mappedBy = "producto", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ProductoImagen> imagenes = new ArrayList<>();
+}
+```
+
+### Automatic Slug Generation
+
+Slugs are automatically generated from product names using a lifecycle hook:
+
+```java
+@PrePersist
+@PreUpdate
+protected void onCreate() {
+    if (this.nombre != null) {
+        this.slug = generarSlug(this.nombre);
+    }
+}
+
+private String generarSlug(String nombre) {
+    return nombre.toLowerCase()
+            .trim()
+            .replace(" ", "-")
+            .replaceAll("[^a-z0-9-]", "")  // Remove special characters
+            .replaceAll("-+", "-");         // Avoid double hyphens
+}
+```
+
+**Example**: "MacBook Pro 16\"" → `macbook-pro-16`
+
+## Viewing Products
+
+### List All Products
+
+```http
+GET /api/productos
+```
+
+Returns all products in the database (including inactive ones for admin views).
+
+```java
+@GetMapping
+public List<Producto> getAll() {
+    return productService.findAll();
+}
+```
+
+### List Active Products Only
+
+```http
+GET /api/productos/activos
+```
+
+Returns only active products, sorted by creation date (newest first):
+
+```java
+@GetMapping("/activos")
+public List<Producto> getActivos() {
+    return productService.getActivos();
+}
+```
+
+<Tip>
+Use `/activos` endpoint for customer-facing storefronts to exclude discontinued products.
+</Tip>
+
+### Get Featured Products
+
+```http
+GET /api/productos/destacados
+```
+
+Returns products marked as featured (for homepage displays):
+
+```java
+@GetMapping("/destacados")
+public ResponseEntity<List<Producto>> listarDestacados() {
+    return ResponseEntity.ok(productService.getDestacados());
+}
+```
+
+### Get Single Product
+
+```http
+GET /api/productos/{id}
+```
+
+Returns complete product details including image gallery and category information.
+
+## Creating Products
+
+<Warning>
+Product creation requires `ROLE_ADMIN` authentication.
+</Warning>
+
+```http
+POST /api/productos
+Authorization: Bearer {token}
+```
+
+**Request Body**:
+
+```json
+{
+  "nombre": "iPhone 15 Pro",
+  "descripcion": "Latest flagship smartphone with titanium design",
+  "precio": 999.99,
+  "stock": 50,
+  "imagenUrl": "https://example.com/iphone15pro.jpg",
+  "destacado": true,
+  "categoria": {
+    "id": 1
+  }
+}
+```
+
+**Implementation**:
+
+```java
+@PostMapping
+@PreAuthorize("hasRole('ADMIN')")
+public Producto create(@RequestBody Producto producto) {
+    return productService.save(producto);
+}
+```
+
+The service automatically handles image relationships:
+
+```java
+@Transactional
+public Producto save(Producto producto) {
+    if (producto.getImagenes() != null) {
+        producto.getImagenes().forEach(img -> img.setProducto(producto));
+    }
+    return productRepository.save(producto);
+}
+```
+
+## Updating Products
+
+### Full Update
+
+```http
+PUT /api/productos/{id}
+Authorization: Bearer {token}
+```
+
+Updates all product fields:
+
+```java
+@Transactional
+public Producto update(Long id, Producto productoDetalles) {
+    return productRepository.findById(id).map(producto -> {
+        producto.setNombre(productoDetalles.getNombre());
+        producto.setDescripcion(productoDetalles.getDescripcion());
+        producto.setPrecio(productoDetalles.getPrecio());
+        producto.setStock(productoDetalles.getStock());
+        producto.setImagenUrl(productoDetalles.getImagenUrl());
+        producto.setActivo(productoDetalles.getActivo());
+        producto.setDestacado(productoDetalles.getDestacado());
+        
+        if (productoDetalles.getCategoria() != null) {
+            producto.setCategoria(productoDetalles.getCategoria());
+        }
+        
+        return productRepository.save(producto);
+    }).orElseThrow(() -> new RuntimeException("Producto no encontrado"));
+}
+```
+
+### Update Image Gallery
+
+```http
+PUT /api/productos/{id}/galeria
+Authorization: Bearer {token}
+```
+
+Updates the product's image gallery:
+
+**Request Body**:
+
+```json
+[
+  "https://example.com/image1.jpg",
+  "https://example.com/image2.jpg",
+  "https://example.com/image3.jpg"
+]
+```
+
+**Implementation**:
+
+```java
+@PutMapping("/{id}/galeria")
+@PreAuthorize("hasRole('ADMIN')")
+public ResponseEntity<?> actualizarGaleria(
+    @PathVariable Long id, 
+    @RequestBody List<String> urls
+) {
+    productService.actualizarGaleria(id, urls);
+    return ResponseEntity.ok()
+        .body("{\"message\": \"Galería actualizada correctamente\"}");
+}
+```
+
+The service replaces all existing images:
+
+```java
+@Transactional
+public void actualizarGaleria(Long id, List<String> urls) {
+    productRepository.findById(id).ifPresent(producto -> {
+        // Clear existing gallery
+        producto.getImagenes().clear();
+        
+        // Add new images
+        if (urls != null) {
+            urls.forEach(url -> {
+                ProductoImagen nuevaImg = new ProductoImagen();
+                nuevaImg.setUrl(url);
+                nuevaImg.setProducto(producto);
+                producto.getImagenes().add(nuevaImg);
+            });
+        }
+        
+        productRepository.save(producto);
+    });
+}
+```
+
+<Note>
+The `orphanRemoval = true` setting automatically deletes removed images from the database.
+</Note>
+
+## Soft Delete
+
+Products are not permanently deleted by default. Instead, they are marked as inactive:
+
+```http
+DELETE /api/productos/{id}
+Authorization: Bearer {token}
+```
+
+```java
+public void delete(Long id) {
+    productRepository.findById(id).ifPresent(producto -> {
+        boolean estadoActual = Boolean.TRUE.equals(producto.getActivo());
+        producto.setActivo(!estadoActual);  // Toggle active status
+        productRepository.save(producto);
+    });
+}
+```
+
+### Permanent Deletion
+
+For complete removal from the database:
+
+```http
+DELETE /api/productos/{id}/definitivo
+Authorization: Bearer {token}
+```
+
+```java
+@DeleteMapping("/{id}/definitivo")
+@PreAuthorize("hasRole('ADMIN')")
+public ResponseEntity<Void> eliminarDefinitivamente(@PathVariable Long id) {
+    productService.deleteHard(id);
+    return ResponseEntity.noContent().build();
+}
+```
+
+<Warning>
+Permanent deletion cannot be undone. Use soft delete for normal operations.
+</Warning>
+
+## Search & Filtering
+
+### Search by Name
+
+```http
+GET /api/productos/buscar?nombre={searchTerm}
+```
+
+Case-insensitive search across product names:
+
+```java
+@GetMapping("/buscar")
+public List<Producto> buscar(@RequestParam String nombre) {
+    return productService.buscarPorNombre(nombre);
+}
+```
+
+**Repository Query**:
+
+```java
+List<Producto> findByNombreContainingIgnoreCaseAndActivoTrue(String nombre);
+```
+
+**Example**: `GET /api/productos/buscar?nombre=macbook` returns all active products with "macbook" in the name.
+
+### Filter by Category
+
+```http
+GET /api/productos/categoria/{categoriaId}
+```
+
+Returns all active products in a specific category:
+
+```java
+@GetMapping("/categoria/{id}")
+public List<Producto> listarPorCategoria(@PathVariable Long id) {
+    return productService.listarPorCategoria(id);
+}
+```
+
+**Repository Query**:
+
+```java
+List<Producto> findByCategoriaIdAndActivoTrue(Long categoriaId);
+```
+
+### Get Similar Products
+
+```http
+GET /api/productos/{id}/similares
+```
+
+Returns up to 4 products from the same category (excluding the current product):
+
+```java
+@GetMapping("/{id}/similares")
+public ResponseEntity<List<Producto>> getSimilares(@PathVariable Long id) {
+    return ResponseEntity.ok(productService.obtenerSimilares(id));
+}
+```
+
+**Implementation**:
+
+```java
+public List<Producto> obtenerSimilares(Long id) {
+    Producto productoOriginal = productRepository.findById(id)
+        .orElseThrow(() -> new RuntimeException("Producto no encontrado"));
+    
+    return productRepository.findTop4ByCategoriaIdAndIdNot(
+        productoOriginal.getCategoria().getId(),
+        id
+    );
+}
+```
+
+<Tip>
+Use this endpoint to display "You may also like" sections on product detail pages.
+</Tip>
+
+## Stock Management
+
+Stock is automatically managed during order processing:
+
+```java
+// When creating an order
+for (PedidoDetalle detalle : pedido.getDetalles()) {
+    Producto producto = productRepository.findById(detalle.getProducto().getId())
+        .orElseThrow(() -> new RuntimeException("Producto no encontrado"));
+    
+    // Validate stock
+    if (producto.getStock() < detalle.getCantidad()) {
+        throw new RuntimeException("Stock insuficiente para: " + producto.getNombre());
+    }
+    
+    // Deduct stock
+    producto.setStock(producto.getStock() - detalle.getCantidad());
+    productRepository.save(producto);
+}
+```
+
+### Stock Replenishment on Cancellation
+
+When orders are cancelled, stock is automatically restored:
+
+```java
+private void reponerStock(Pedido pedido) {
+    for (PedidoDetalle detalle : pedido.getDetalles()) {
+        Producto producto = detalle.getProducto();
+        if (producto != null) {
+            producto.setStock(producto.getStock() + detalle.getCantidad());
+            productRepository.save(producto);
+        }
+    }
+}
+```
+
+<Warning>
+Always validate stock availability before allowing customers to proceed to checkout.
+</Warning>
+
+## API Reference
+
+<Tabs>
+  <Tab title="Public Endpoints">
+    | Method | Endpoint | Description |
+    |--------|----------|-------------|
+    | GET | `/api/productos` | List all products |
+    | GET | `/api/productos/activos` | List active products |
+    | GET | `/api/productos/destacados` | List featured products |
+    | GET | `/api/productos/{id}` | Get product details |
+    | GET | `/api/productos/buscar?nombre={term}` | Search products |
+    | GET | `/api/productos/categoria/{id}` | Filter by category |
+    | GET | `/api/productos/{id}/similares` | Get similar products |
+  </Tab>
+  
+  <Tab title="Admin Endpoints">
+    | Method | Endpoint | Description | Auth |
+    |--------|----------|-------------|------|
+    | POST | `/api/productos` | Create product | ADMIN |
+    | PUT | `/api/productos/{id}` | Update product | ADMIN |
+    | PUT | `/api/productos/{id}/galeria` | Update gallery | ADMIN |
+    | DELETE | `/api/productos/{id}` | Soft delete | ADMIN |
+    | DELETE | `/api/productos/{id}/definitivo` | Hard delete | ADMIN |
+  </Tab>
+</Tabs>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Image Optimization" icon="image">
+    Always optimize images before upload. Use CDN URLs for better performance.
+  </Card>
+  
+  <Card title="Stock Validation" icon="boxes-stacked">
+    Validate stock on both frontend and backend to prevent overselling.
+  </Card>
+  
+  <Card title="SEO-Friendly URLs" icon="magnifying-glass">
+    Leverage auto-generated slugs for clean, searchable URLs.
+  </Card>
+  
+  <Card title="Soft Deletes" icon="trash-undo">
+    Use soft deletes to maintain order history and enable product restoration.
+  </Card>
+</CardGroup>

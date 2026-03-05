@@ -1,0 +1,414 @@
+---
+title: "Orders API"
+description: "Complete API reference for order management and PDF reporting"
+---
+
+## Overview
+
+The Orders API handles order creation, tracking, status management, and PDF report generation. It includes automatic stock validation and email notifications.
+
+**Base URL**: `/api/pedidos`
+
+**Source**: `PedidoController.java`
+
+## Authentication
+
+<Note>
+- **Customer endpoints**: Create, view own orders - requires authentication
+- **Admin endpoints**: List all, update status, delete, PDF reports - requires `ROLE_ADMIN`
+</Note>
+
+## Order States
+
+Orders progress through the following states:
+
+- `PENDIENTE` - Order placed, awaiting payment
+- `PAGADO` - Payment confirmed
+- `ENVIADO` - Order shipped
+- `ENTREGADO` - Order delivered
+- `CANCELADO` - Order cancelled (stock restored)
+
+---
+
+## Endpoints
+
+### Create Order
+
+```http
+POST /api/pedidos
+```
+
+Create a new order. The system automatically calculates the total, validates stock availability, and deducts stock from products.
+
+**Authentication**: Required (any authenticated user)
+
+**Request Body**:
+
+<ParamField body="usuario" type="object" required>
+  User object with `id` field
+</ParamField>
+
+<ParamField body="detalles" type="array" required>
+  Array of order detail objects
+  <Expandable title="Order Detail Object">
+    <ParamField body="producto" type="object" required>
+      Product object with `id` field
+    </ParamField>
+    <ParamField body="cantidad" type="integer" required>
+      Quantity to order
+    </ParamField>
+    <ParamField body="precio" type="double" required>
+      Price at time of order
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="direccionEnvio" type="string">
+  Shipping address (optional, can use user's default address)
+</ParamField>
+
+**Example Request**:
+
+```bash cURL
+curl -X POST http://localhost:8080/api/pedidos \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "usuario": {"id": 5},
+    "direccionEnvio": "123 Main St, City",
+    "detalles": [
+      {
+        "producto": {"id": 1},
+        "cantidad": 2,
+        "precio": 1299.99
+      },
+      {
+        "producto": {"id": 3},
+        "cantidad": 1,
+        "precio": 49.99
+      }
+    ]
+  }'
+```
+
+**Response**: `201 Created`
+
+<ResponseField name="id" type="long">
+  Order ID
+</ResponseField>
+
+<ResponseField name="usuario" type="object">
+  User object
+</ResponseField>
+
+<ResponseField name="total" type="double">
+  Calculated order total (sum of precio * cantidad for all details)
+</ResponseField>
+
+<ResponseField name="estado" type="string">
+  Order status (initially "PENDIENTE")
+</ResponseField>
+
+<ResponseField name="fechaPedido" type="datetime">
+  Timestamp of order creation
+</ResponseField>
+
+<ResponseField name="detalles" type="array">
+  Array of order detail objects with product, cantidad, precio
+</ResponseField>
+
+**Error Responses**:
+
+- `400 Bad Request` - Stock insufficient or user not found
+  ```json
+  "Stock insuficiente para el producto: Laptop Dell XPS 15"
+  ```
+- `500 Internal Server Error` - Server error
+
+<Note>
+The `createPedido` service method automatically:
+- Validates stock availability for each product
+- Deducts ordered quantities from product stock
+- Calculates the total amount
+- Sets order state to "PENDIENTE"
+</Note>
+
+---
+
+### Get Order by ID
+
+```http
+GET /api/pedidos/{id}
+```
+
+Retrieve a specific order by ID.
+
+**Authentication**: Required
+
+<ParamField path="id" type="long" required>
+  Order ID
+</ParamField>
+
+**Responses**:
+- `200 OK` - Order object with user, detalles, and calculated total
+- `404 Not Found` - Order does not exist
+
+---
+
+### List Orders by User
+
+```http
+GET /api/pedidos/usuario/{usuarioId}
+```
+
+Retrieve all orders for a specific user (order history).
+
+**Authentication**: Required
+
+<ParamField path="usuarioId" type="long" required>
+  User ID
+</ParamField>
+
+**Response**: `200 OK` - Array of order objects
+
+**Example Request**:
+
+```bash cURL
+curl -X GET http://localhost:8080/api/pedidos/usuario/5 \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+<Tip>
+Use this endpoint to display a customer's order history page.
+</Tip>
+
+---
+
+### List All Orders (Admin)
+
+```http
+GET /api/pedidos
+```
+
+Retrieve all orders in the system.
+
+**Authentication**: Required - `ROLE_ADMIN`
+
+**Response**: `200 OK` - Array of all order objects
+
+**Use Case**: Admin dashboard to view and manage all customer orders.
+
+---
+
+### Update Order Status
+
+```http
+PUT /api/pedidos/{id}/estado?nuevoEstado={estado}
+```
+
+Update the status of an order.
+
+**Authentication**: Required - `ROLE_ADMIN`
+
+<ParamField path="id" type="long" required>
+  Order ID
+</ParamField>
+
+<ParamField query="nuevoEstado" type="string" required>
+  New order status: `PENDIENTE`, `PAGADO`, `ENVIADO`, `ENTREGADO`, or `CANCELADO`
+</ParamField>
+
+**Response**: `200 OK` - Updated order object
+
+**Example Request**:
+
+```bash cURL
+curl -X PUT "http://localhost:8080/api/pedidos/42/estado?nuevoEstado=ENVIADO" \
+  -H "Authorization: Bearer ADMIN_JWT_TOKEN"
+```
+
+<Warning>
+Cancelling an order (`CANCELADO` state) automatically **restores the stock** for all products in the order.
+</Warning>
+
+---
+
+### Generate PDF Report
+
+```http
+POST /api/pedidos/reporte/pdf
+```
+
+Generate a PDF sales report for a filtered list of orders.
+
+**Authentication**: Required - `ROLE_ADMIN`
+
+**Request Body**: Array of order objects (filtered by date, status, etc.)
+
+**Response**: `200 OK` - Binary PDF file
+
+**Headers**:
+- `Content-Type: application/pdf`
+- `Content-Disposition: attachment; filename="reporte-ventas.pdf"`
+
+**Example Request**:
+
+```javascript JavaScript
+async function downloadSalesReport(orders, token) {
+  const response = await fetch('http://localhost:8080/api/pedidos/reporte/pdf', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(orders)
+  });
+  
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'reporte-ventas.pdf';
+  a.click();
+}
+```
+
+<Note>
+The PDF generation uses the **OpenPDF** library (version 1.3.30). The report includes order details, totals, and summary statistics.
+</Note>
+
+---
+
+### Delete Order
+
+```http
+DELETE /api/pedidos/{id}
+```
+
+Delete an order from the system.
+
+**Authentication**: Required - `ROLE_ADMIN`
+
+<ParamField path="id" type="long" required>
+  Order ID
+</ParamField>
+
+**Responses**:
+- `200 OK` - "Pedido eliminado correctamente"
+- `500 Internal Server Error` - "Error al eliminar el pedido"
+
+---
+
+## Order Workflow
+
+<Steps>
+  <Step title="Customer Creates Order">
+    Customer adds items to cart and proceeds to checkout. The cart is converted to an order via `POST /api/pedidos`.
+  </Step>
+  
+  <Step title="Stock Validation">
+    System validates that sufficient stock exists for each product. If stock is insufficient, the order is rejected with a `400` error.
+  </Step>
+  
+  <Step title="Stock Deduction">
+    Upon successful validation, the ordered quantities are deducted from product stock.
+  </Step>
+  
+  <Step title="Order Processing">
+    Admin reviews the order and updates status: `PENDIENTE` → `PAGADO` → `ENVIADO` → `ENTREGADO`.
+  </Step>
+  
+  <Step title="Email Notification">
+    Customer receives email confirmation at each status change.
+  </Step>
+</Steps>
+
+---
+
+## Integration Examples
+
+### Customer: Place Order
+
+```javascript JavaScript
+async function placeOrder(userId, items, address, token) {
+  const orderData = {
+    usuario: { id: userId },
+    direccionEnvio: address,
+    detalles: items.map(item => ({
+      producto: { id: item.productId },
+      cantidad: item.quantity,
+      precio: item.price
+    }))
+  };
+  
+  try {
+    const response = await fetch('http://localhost:8080/api/pedidos', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(orderData)
+    });
+    
+    if (response.ok) {
+      const order = await response.json();
+      console.log('Order created:', order.id);
+      return order;
+    } else {
+      const error = await response.text();
+      console.error('Order failed:', error);
+    }
+  } catch (error) {
+    console.error('Error placing order:', error);
+  }
+}
+```
+
+### Admin: Update Order Status
+
+```javascript JavaScript
+async function updateOrderStatus(orderId, newStatus, token) {
+  const response = await fetch(
+    `http://localhost:8080/api/pedidos/${orderId}/estado?nuevoEstado=${newStatus}`,
+    {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${token}` }
+    }
+  );
+  
+  return response.json();
+}
+
+// Usage
+await updateOrderStatus(42, 'ENVIADO', adminToken);
+```
+
+---
+
+## Error Handling
+
+| Status Code | Scenario | Solution |
+|-------------|----------|----------|
+| `400 Bad Request` | Insufficient stock | Reduce order quantity or restock product |
+| `400 Bad Request` | User not found | Verify user ID exists |
+| `401 Unauthorized` | Missing/invalid token | Re-authenticate user |
+| `403 Forbidden` | Non-admin accessing admin endpoints | Check user role |
+| `404 Not Found` | Order does not exist | Verify order ID |
+| `500 Internal Server Error` | Database or service error | Check server logs |
+
+---
+
+## Related Endpoints
+
+<CardGroup cols={2}>
+  <Card title="Cart API" icon="shopping-cart" href="/api/cart-api">
+    Convert cart to order
+  </Card>
+  <Card title="Products API" icon="box" href="/api/products-api">
+    Manage product stock
+  </Card>
+  <Card title="Users API" icon="user" href="/api/users-api">
+    Manage customer accounts
+  </Card>
+</CardGroup>

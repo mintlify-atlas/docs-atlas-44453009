@@ -1,0 +1,83 @@
+---
+title: "Introduction"
+description: "Welcome to TechStore - Your enterprise e-commerce platform built with Java Spring Boot"
+---
+
+## Welcome to TechStore
+
+TechStore is a high-performance e-commerce platform built with **Java 21** and **Spring Boot 3**, featuring advanced security, intelligent inventory management, and real-time analytics.
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get TechStore running in minutes
+  </Card>
+  <Card title="Installation Guide" icon="download" href="/installation">
+    Complete setup instructions
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/auth-endpoints">
+    Explore the REST API
+  </Card>
+  <Card title="Admin Guide" icon="shield" href="/guides/admin-guide">
+    Manage your store
+  </Card>
+</CardGroup>
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Bank-Grade Security" icon="lock">
+    RSA asymmetric encryption with JWT tokens for secure authentication
+  </Card>
+  <Card title="Product Management" icon="box">
+    Complete CRUD operations with dynamic image galleries and stock control
+  </Card>
+  <Card title="Admin Dashboard" icon="chart-line">
+    Real-time sales metrics, average ticket analysis, and statistical charts
+  </Card>
+  <Card title="PDF Reports" icon="file-pdf">
+    Generate and download order reports in PDF format
+  </Card>
+  <Card title="Email Automation" icon="envelope">
+    Automated account activation and password recovery flows
+  </Card>
+  <Card title="Role-Based Access" icon="users">
+    RBAC with granular permission control for users and admins
+  </Card>
+</CardGroup>
+
+## Technology Stack
+
+TechStore is built on a robust, modern technology stack:
+
+- **Backend**: Java 21, Spring Boot 3.x, Spring Security 6, JPA/Hibernate
+- **Security**: RSA + JWT authentication with stateless validation
+- **Database**: MySQL/PostgreSQL with optimized queries
+- **Frontend**: JavaScript SPA with Bootstrap 5 and CSS3
+- **Tools**: Chart.js for analytics, Flatpickr for filters, SweetAlert2 for UX
+
+## Architecture
+
+The system uses a **multi-layered** decoupled architecture:
+
+1. **REST API Layer**: Optimized endpoints for asynchronous communication
+2. **Service Layer**: Transactional business logic with Spring @Service components
+3. **Security Layer**: Custom filters for stateless JWT validation
+4. **Data Layer**: JPA repositories with Spring Data abstractions
+
+<Note>
+TechStore follows RESTful design principles and implements CORS support for cross-origin requests.
+</Note>
+
+## Next Steps
+
+<Steps>
+  <Step title="Read the Quickstart">
+    Get TechStore up and running with our [quickstart guide](/quickstart)
+  </Step>
+  <Step title="Explore Features">
+    Learn about [authentication](/features/authentication), [products](/features/products), and [orders](/features/orders)
+  </Step>
+  <Step title="Check the API">
+    Review the [API reference](/api/auth-endpoints) for integration details
+  </Step>
+</Steps>

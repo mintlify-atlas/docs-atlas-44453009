@@ -1,0 +1,574 @@
+---
+title: "Order Management"
+description: "Order creation, status tracking, order history, and PDF report generation"
+---
+
+## Overview
+
+TechStore's order management system handles the complete order lifecycle from creation to fulfillment, including automatic stock management, email notifications, and PDF report generation for both customers and administrators.
+
+<Note>
+Orders automatically trigger email confirmations with purchase details and can generate PDF reports for record-keeping.
+</Note>
+
+## Order Model
+
+The order system uses two related entities:
+
+```java
+@Entity
+@Table(name = "pedidos")
+public class Pedido {
+    private Long id;
+    
+    @ManyToOne
+    @JoinColumn(name = "id_usuario")
+    private Usuario usuario;
+    
+    private LocalDateTime fechaPedido;
+    private BigDecimal total;
+    private String estado;  // PENDIENTE, PAGADO, ENVIADO, ENTREGADO, CANCELADO
+    
+    @OneToMany(mappedBy = "pedido", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<PedidoDetalle> detalles;
+}
+```
+
+```java
+@Entity
+public class PedidoDetalle {
+    private Long id;
+    
+    @ManyToOne
+    private Pedido pedido;
+    
+    @ManyToOne
+    private Producto producto;
+    
+    private Integer cantidad;
+    private BigDecimal precioUnitario;  // Snapshot of price at purchase time
+}
+```
+
+## Creating Orders
+
+<Steps>
+  <Step title="Submit order request">
+    Client sends order with user ID and product details
+  </Step>
+  
+  <Step title="Validate user">
+    System verifies user exists in the database
+  </Step>
+  
+  <Step title="Check stock availability">
+    For each product, validate sufficient stock exists
+  </Step>
+  
+  <Step title="Deduct stock">
+    Reduce product stock by ordered quantities
+  </Step>
+  
+  <Step title="Calculate total">
+    Sum all line items to compute order total
+  </Step>
+  
+  <Step title="Save order">
+    Persist order to database with PENDIENTE status
+  </Step>
+  
+  <Step title="Send confirmation email">
+    Email customer with order details
+  </Step>
+</Steps>
+
+### Create Order Endpoint
+
+```http
+POST /api/pedidos
+Authorization: Bearer {token}
+```
+
+**Request Body**:
+
+```json
+{
+  "usuario": {
+    "id": 5
+  },
+  "detalles": [
+    {
+      "producto": { "id": 10 },
+      "cantidad": 2
+    },
+    {
+      "producto": { "id": 15 },
+      "cantidad": 1
+    }
+  ]
+}
+```
+
+**Implementation**:
+
+```java
+@PostMapping
+public ResponseEntity<?> crear(@RequestBody Pedido pedido) {
+    try {
+        Pedido nuevoPedido = pedidoService.createPedido(pedido);
+        return new ResponseEntity<>(nuevoPedido, HttpStatus.CREATED);
+    } catch (RuntimeException e) {
+        // Catches "Stock insuficiente" or "Usuario no encontrado" errors
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(e.getMessage());
+    } catch (Exception e) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+            .body("Error interno en el servidor");
+    }
+}
+```
+
+### Order Creation Logic
+
+```java
+@Transactional
+public Pedido createPedido(Pedido pedido) {
+    // 1. Validate user
+    Usuario usuarioExistente = usuarioRepository.findById(pedido.getUsuario().getId())
+        .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+    pedido.setUsuario(usuarioExistente);
+    
+    // 2. Set initial status
+    if (pedido.getEstado() == null) {
+        pedido.setEstado("PENDIENTE");
+    }
+    
+    BigDecimal total = BigDecimal.ZERO;
+    
+    // 3. Process each line item
+    for (PedidoDetalle detalle : pedido.getDetalles()) {
+        Producto producto = productRepository.findById(detalle.getProducto().getId())
+            .orElseThrow(() -> new RuntimeException("Producto no encontrado"));
+        
+        // Validate stock
+        if (producto.getStock() < detalle.getCantidad()) {
+            throw new RuntimeException("Stock insuficiente para: " + producto.getNombre());
+        }
+        
+        // Deduct stock
+        producto.setStock(producto.getStock() - detalle.getCantidad());
+        productRepository.save(producto);
+        
+        // Set relationships and pricing
+        detalle.setPedido(pedido);
+        detalle.setPrecioUnitario(producto.getPrecio());
+        detalle.setProducto(producto);
+        
+        // Calculate subtotal
+        BigDecimal subtotal = producto.getPrecio()
+            .multiply(new BigDecimal(detalle.getCantidad()));
+        total = total.add(subtotal);
+    }
+    
+    pedido.setTotal(total);
+    
+    // 4. Save to database
+    Pedido pedidoGuardado = pedidoRepository.save(pedido);
+    
+    // 5. Send confirmation email
+    try {
+        emailService.enviarInformeCompra(pedidoGuardado);
+    } catch (Exception e) {
+        System.err.println("Error al enviar correo: " + e.getMessage());
+        // Don't fail the transaction if email fails
+    }
+    
+    return pedidoGuardado;
+}
+```
+
+<Warning>
+The order creation is transactional. If stock validation fails for any item, the entire order is rolled back.
+</Warning>
+
+## Viewing Orders
+
+### Get User's Orders
+
+```http
+GET /api/pedidos/usuario/{usuarioId}
+Authorization: Bearer {token}
+```
+
+Returns all orders for a specific user:
+
+```java
+@GetMapping("/usuario/{usuarioId}")
+public List<Pedido> listarPorUsuario(@PathVariable Long usuarioId) {
+    return pedidoService.listarPedidoPorUsuario(usuarioId);
+}
+```
+
+**Use Case**: Customer order history page showing all past purchases.
+
+### Get All Orders (Admin)
+
+```http
+GET /api/pedidos
+Authorization: Bearer {admin-token}
+```
+
+<Warning>
+Requires `ROLE_ADMIN` authentication.
+</Warning>
+
+```java
+@GetMapping
+public List<Pedido> listarTodos() {
+    return pedidoService.obtenerTodosLosPedidos();
+}
+```
+
+**Use Case**: Admin dashboard showing all customer orders for fulfillment.
+
+### Get Single Order
+
+```http
+GET /api/pedidos/{id}
+Authorization: Bearer {token}
+```
+
+Returns complete order details including line items:
+
+```java
+@GetMapping("/{id}")
+public ResponseEntity<Pedido> getById(@PathVariable Long id) {
+    Pedido pedido = pedidoService.obtenerPorId(id);
+    return pedido != null 
+        ? ResponseEntity.ok(pedido) 
+        : ResponseEntity.notFound().build();
+}
+```
+
+## Order Status Management
+
+### Available Statuses
+
+<CardGroup cols={2}>
+  <Card title="PENDIENTE" icon="clock">
+    Initial status when order is created. Awaiting payment or processing.
+  </Card>
+  
+  <Card title="PAGADO" icon="credit-card">
+    Payment confirmed. Ready for fulfillment.
+  </Card>
+  
+  <Card title="ENVIADO" icon="truck">
+    Order shipped to customer. Tracking available.
+  </Card>
+  
+  <Card title="ENTREGADO" icon="box-check">
+    Successfully delivered to customer.
+  </Card>
+  
+  <Card title="CANCELADO" icon="circle-xmark">
+    Order cancelled. Stock automatically restored.
+  </Card>
+</CardGroup>
+
+### Update Order Status
+
+```http
+PUT /api/pedidos/{id}/estado?nuevoEstado={status}
+Authorization: Bearer {admin-token}
+```
+
+**Example**: `PUT /api/pedidos/42/estado?nuevoEstado=ENVIADO`
+
+**Implementation**:
+
+```java
+@PutMapping("/{id}/estado")
+public ResponseEntity<Pedido> actualizarEstado(
+    @PathVariable Long id,
+    @RequestParam String nuevoEstado
+) {
+    Pedido pedidoActualizado = pedidoService.actualizarEstado(id, nuevoEstado);
+    return ResponseEntity.ok(pedidoActualizado);
+}
+```
+
+### Automatic Stock Restoration on Cancellation
+
+When an order is cancelled, the system automatically returns products to inventory:
+
+```java
+@Transactional
+public Pedido actualizarEstado(Long id, String nuevoEstado) {
+    Pedido pedido = pedidoRepository.findById(id)
+        .orElseThrow(() -> new RuntimeException("Pedido no encontrado"));
+    
+    // If changing TO cancelled status (and wasn't already cancelled)
+    if ("CANCELADO".equalsIgnoreCase(nuevoEstado) 
+        && !"CANCELADO".equals(pedido.getEstado())) {
+        reponerStock(pedido);
+    }
+    
+    pedido.setEstado(nuevoEstado.toUpperCase());
+    return pedidoRepository.save(pedido);
+}
+
+private void reponerStock(Pedido pedido) {
+    for (PedidoDetalle detalle : pedido.getDetalles()) {
+        Producto producto = detalle.getProducto();
+        if (producto != null) {
+            producto.setStock(producto.getStock() + detalle.getCantidad());
+            productRepository.save(producto);
+        }
+    }
+}
+```
+
+<Note>
+Stock restoration only happens when transitioning TO cancelled status. Re-cancelling an already cancelled order won't double the stock.
+</Note>
+
+## PDF Report Generation
+
+Administrators can generate comprehensive sales reports in PDF format:
+
+```http
+POST /api/pedidos/reporte/pdf
+Authorization: Bearer {admin-token}
+```
+
+**Request Body** (filtered orders):
+
+```json
+[
+  {
+    "id": 1,
+    "fechaPedido": "2026-03-01T10:30:00",
+    "usuario": {
+      "nombre": "John",
+      "apellido": "Doe",
+      "email": "john@example.com"
+    },
+    "estado": "ENTREGADO",
+    "total": 1599.99
+  },
+  ...
+]
+```
+
+**Implementation**:
+
+```java
+@PostMapping("/reporte/pdf")
+public ResponseEntity<byte[]> descargarReporte(
+    @RequestBody List<Pedido> pedidosFiltrados
+) {
+    byte[] pdf = pedidoReporteService.generarReportePedidos(pedidosFiltrados);
+    
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_PDF);
+    headers.setContentDispositionFormData("attachment", "reporte-ventas.pdf");
+    
+    return new ResponseEntity<>(pdf, headers, HttpStatus.OK);
+}
+```
+
+### PDF Report Structure
+
+The report includes:
+
+1. **Header**: "TECHSTORE - REPORTE DE VENTAS"
+2. **Table** with columns:
+   - ID
+   - Fecha (Order date)
+   - Cliente (Customer name/email)
+   - Estado (Status)
+   - Total (Order amount)
+3. **Footer**: Grand total of all orders
+
+**PDF Generation Code**:
+
+```java
+public byte[] generarReportePedidos(List<Pedido> pedidos) {
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    Document documento = new Document(PageSize.A4);
+    
+    try {
+        PdfWriter.getInstance(documento, out);
+        documento.open();
+        
+        // Title
+        Font fuenteTitulo = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18);
+        Paragraph titulo = new Paragraph("TECHSTORE - REPORTE DE VENTAS", fuenteTitulo);
+        titulo.setAlignment(Element.ALIGN_CENTER);
+        titulo.setSpacingAfter(20);
+        documento.add(titulo);
+        
+        // Table setup
+        PdfPTable tabla = new PdfPTable(5);
+        tabla.setWidthPercentage(100);
+        tabla.setWidths(new float[]{1.0f, 2.5f, 3.5f, 2.0f, 2.0f});
+        
+        // Headers
+        String[] cabeceras = {"ID", "Fecha", "Cliente", "Estado", "Total"};
+        for (String h : cabeceras) {
+            PdfPCell cell = new PdfPCell(
+                new Paragraph(h, FontFactory.getFont(FontFactory.HELVETICA_BOLD))
+            );
+            cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+            cell.setPadding(5);
+            cell.setBackgroundColor(java.awt.Color.LIGHT_GRAY);
+            tabla.addCell(cell);
+        }
+        
+        // Data rows
+        BigDecimal granTotal = BigDecimal.ZERO;
+        for (Pedido p : pedidos) {
+            tabla.addCell(String.valueOf(p.getId()));
+            tabla.addCell(p.getFechaPedido().toString());
+            
+            String clienteInfo = p.getUsuario().getNombre() + " " 
+                               + p.getUsuario().getApellido();
+            if (clienteInfo.trim().isEmpty()) {
+                clienteInfo = p.getUsuario().getEmail();
+            }
+            tabla.addCell(clienteInfo);
+            
+            tabla.addCell(p.getEstado());
+            
+            BigDecimal valorPedido = p.getTotal() != null 
+                ? p.getTotal() 
+                : BigDecimal.ZERO;
+            tabla.addCell("$" + String.format("%.2f", valorPedido));
+            
+            granTotal = granTotal.add(valorPedido);
+        }
+        
+        documento.add(tabla);
+        
+        // Grand total
+        Paragraph totalFinal = new Paragraph(
+            "\nTOTAL RECAUDADO: $" + String.format("%.2f", granTotal),
+            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 14)
+        );
+        totalFinal.setAlignment(Element.ALIGN_RIGHT);
+        documento.add(totalFinal);
+        
+        documento.close();
+    } catch (Exception e) {
+        e.printStackTrace();
+    }
+    
+    return out.toByteArray();
+}
+```
+
+<Tip>
+Generate reports for specific date ranges or statuses by filtering orders before sending to the endpoint.
+</Tip>
+
+## Deleting Orders
+
+```http
+DELETE /api/pedidos/{id}
+Authorization: Bearer {admin-token}
+```
+
+<Warning>
+Deleting an order does NOT restore stock. Cancel the order first if stock restoration is needed.
+</Warning>
+
+```java
+@DeleteMapping("/{id}")
+public ResponseEntity<?> eliminar(@PathVariable Long id) {
+    try {
+        pedidoService.eliminarPedido(id);
+        return ResponseEntity.ok().body("Pedido eliminado correctamente");
+    } catch (Exception e) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+            .body("Error al eliminar el pedido");
+    }
+}
+```
+
+## Email Notifications
+
+When an order is successfully created, the system automatically sends a purchase confirmation email:
+
+```java
+try {
+    emailService.enviarInformeCompra(pedidoGuardado);
+} catch (Exception e) {
+    System.err.println("Error al enviar correo de compra: " + e.getMessage());
+    // Don't cancel transaction if email fails
+}
+```
+
+<Note>
+Email failures do not roll back the order transaction. Orders are saved even if email delivery fails.
+</Note>
+
+## API Reference
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| POST | `/api/pedidos` | Create new order | USER |
+| GET | `/api/pedidos/usuario/{userId}` | Get user's orders | USER |
+| GET | `/api/pedidos/{id}` | Get order details | USER |
+| GET | `/api/pedidos` | List all orders | ADMIN |
+| PUT | `/api/pedidos/{id}/estado` | Update order status | ADMIN |
+| POST | `/api/pedidos/reporte/pdf` | Generate PDF report | ADMIN |
+| DELETE | `/api/pedidos/{id}` | Delete order | ADMIN |
+
+## Workflow Example
+
+<Steps>
+  <Step title="Customer adds items to cart">
+    Products added with desired quantities
+  </Step>
+  
+  <Step title="Proceed to checkout">
+    Cart converted to order via `/api/pedidos` endpoint
+  </Step>
+  
+  <Step title="Order created (PENDIENTE)">
+    Stock deducted, confirmation email sent
+  </Step>
+  
+  <Step title="Admin processes payment">
+    Status updated to PAGADO via admin dashboard
+  </Step>
+  
+  <Step title="Order fulfilled">
+    Status progresses: ENVIADO → ENTREGADO
+  </Step>
+  
+  <Step title="Generate report">
+    Monthly sales report created as PDF
+  </Step>
+</Steps>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Price Snapshots" icon="camera">
+    Store `precioUnitario` in order details to preserve historical pricing.
+  </Card>
+  
+  <Card title="Stock Validation" icon="shield-check">
+    Always validate stock before accepting orders to prevent overselling.
+  </Card>
+  
+  <Card title="Transaction Safety" icon="database">
+    Use `@Transactional` to ensure order creation is atomic.
+  </Card>
+  
+  <Card title="Status Tracking" icon="list-check">
+    Implement clear status progression for better customer communication.
+  </Card>
+</CardGroup>
