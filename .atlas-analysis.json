@@ -1,0 +1,84 @@
+{
+  "projectType": "saas",
+  "projectName": "TechStore",
+  "projectDescription": "Enterprise e-commerce platform with advanced security, inventory management, and real-time analytics built on Java Spring Boot",
+  "theme": "almond",
+  "primaryColor": "#007bff",
+  "lightColor": "#28a745",
+  "darkColor": "#dc3545",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/authentication",
+              "features/products",
+              "features/orders",
+              "features/cart",
+              "features/admin-dashboard"
+            ]
+          },
+          {
+            "group": "User Guides",
+            "pages": [
+              "guides/customer-guide",
+              "guides/admin-guide"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Authentication",
+            "pages": [
+              "api/auth-endpoints"
+            ]
+          },
+          {
+            "group": "Resources",
+            "pages": [
+              "api/products-api",
+              "api/orders-api",
+              "api/users-api",
+              "api/categories-api",
+              "api/cart-api"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "RSA + JWT authentication with email verification",
+    "Product catalog with dynamic image galleries",
+    "Shopping cart and order management",
+    "Admin dashboard with sales analytics and PDF reports",
+    "Role-based access control (RBAC)",
+    "Automated email notifications"
+  ],
+  "publicApiSurface": [
+    "POST /api/auth/register",
+    "POST /api/auth/login",
+    "POST /api/auth/forgot-password",
+    "GET /api/productos",
+    "GET /api/productos/{id}",
+    "POST /api/pedidos",
+    "GET /api/pedidos/usuario/{usuarioId}",
+    "GET /api/categorias",
+    "POST /api/carrito/agregar",
+    "GET /api/usuarios/{id}"
+  ]
+}
