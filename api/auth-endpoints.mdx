@@ -13,7 +13,7 @@ The TechStore API provides a complete authentication system with email verificat
 
 <CodeGroup>
 ```bash cURL
-curl -X POST https://api.techstore.com/api/auth/register \
+curl -X POST http://localhost:8080/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "nombre": "John",
@@ -26,7 +26,7 @@ curl -X POST https://api.techstore.com/api/auth/register \
 ```
 
 ```javascript JavaScript
-const response = await fetch('https://api.techstore.com/api/auth/register', {
+const response = await fetch('http://localhost:8080/api/auth/register', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json'
@@ -48,7 +48,7 @@ const data = await response.json();
 import requests
 
 response = requests.post(
-    'https://api.techstore.com/api/auth/register',
+    'http://localhost:8080/api/auth/register',
     json={
         'nombre': 'John',
         'apellido': 'Doe',
@@ -139,19 +139,19 @@ data = response.json()
 
 <CodeGroup>
 ```bash cURL
-curl -X GET "https://api.techstore.com/api/auth/verificar?token=a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+curl -X GET "http://localhost:8080/api/auth/verificar?token=a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 ```
 
 ```javascript JavaScript
 // This is typically accessed via email link click
-window.location.href = 'https://api.techstore.com/api/auth/verificar?token=a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+window.location.href = 'http://localhost:8080/api/auth/verificar?token=a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 ```
 
 ```python Python
 import requests
 
 response = requests.get(
-    'https://api.techstore.com/api/auth/verificar',
+    'http://localhost:8080/api/auth/verificar',
     params={'token': 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'}
 )
 
@@ -231,7 +231,7 @@ Returns a styled HTML error page with:
 
 <CodeGroup>
 ```bash cURL
-curl -X POST https://api.techstore.com/api/auth/login \
+curl -X POST http://localhost:8080/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{
     "email": "john.doe@example.com",
@@ -240,7 +240,7 @@ curl -X POST https://api.techstore.com/api/auth/login \
 ```
 
 ```javascript JavaScript
-const response = await fetch('https://api.techstore.com/api/auth/login', {
+const response = await fetch('http://localhost:8080/api/auth/login', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json'
@@ -262,7 +262,7 @@ localStorage.setItem('token', access_token);
 import requests
 
 response = requests.post(
-    'https://api.techstore.com/api/auth/login',
+    'http://localhost:8080/api/auth/login',
     json={
         'email': 'john.doe@example.com',
         'password': 'securePassword123'
@@ -406,7 +406,7 @@ Authorization: Bearer eyJhbGciOiJSUzI1NiJ9...
 
 <CodeGroup>
 ```bash cURL
-curl -X POST https://api.techstore.com/api/auth/forgot-password \
+curl -X POST http://localhost:8080/api/auth/forgot-password \
   -H "Content-Type: application/json" \
   -d '{
     "email": "john.doe@example.com"
@@ -414,7 +414,7 @@ curl -X POST https://api.techstore.com/api/auth/forgot-password \
 ```
 
 ```javascript JavaScript
-const response = await fetch('https://api.techstore.com/api/auth/forgot-password', {
+const response = await fetch('http://localhost:8080/api/auth/forgot-password', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json'
@@ -431,7 +431,7 @@ const data = await response.json();
 import requests
 
 response = requests.post(
-    'https://api.techstore.com/api/auth/forgot-password',
+    'http://localhost:8080/api/auth/forgot-password',
     json={
         'email': 'john.doe@example.com'
     }
@@ -504,7 +504,7 @@ data = response.json()
 
 <CodeGroup>
 ```bash cURL
-curl -X POST https://api.techstore.com/api/auth/reset-password \
+curl -X POST http://localhost:8080/api/auth/reset-password \
   -H "Content-Type: application/json" \
   -d '{
     "token": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
@@ -513,7 +513,7 @@ curl -X POST https://api.techstore.com/api/auth/reset-password \
 ```
 
 ```javascript JavaScript
-const response = await fetch('https://api.techstore.com/api/auth/reset-password', {
+const response = await fetch('http://localhost:8080/api/auth/reset-password', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json'
@@ -531,7 +531,7 @@ const data = await response.json();
 import requests
 
 response = requests.post(
-    'https://api.techstore.com/api/auth/reset-password',
+    'http://localhost:8080/api/auth/reset-password',
     json={
         'token': 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
         'nuevaPassword': 'newSecurePassword456'
